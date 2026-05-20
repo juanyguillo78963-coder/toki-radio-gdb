@@ -12,34 +12,62 @@ app.use(express.static(path.join(__dirname, "public")));
 
 app.get("/", (_, res) => res.redirect("/s/gases-belen"));
 app.get("/s/:room", (_, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
+app.get("/health", (_, res) => res.json({ ok: true, name: "Radio Telefono GDB" }));
 
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" }, transports: ["websocket", "polling"] });
+const io = new Server(server, {
+  cors: { origin: "*" },
+  transports: ["websocket", "polling"],
+  pingInterval: 10000,
+  pingTimeout: 25000,
+  maxHttpBufferSize: 1e7
+});
 
 const rooms = new Map();
-const getRoom = id => {
+function getRoom(id) {
   if (!rooms.has(id)) rooms.set(id, new Map());
   return rooms.get(id);
-};
-const publicUsers = id => Array.from(getRoom(id).values()).map(u => ({
-  id: u.id, name: u.name, speaking: u.speaking, joinedAt: u.joinedAt
-}));
+}
+function cleanName(name) {
+  return String(name || "Oyente").trim().slice(0, 32) || "Oyente";
+}
+function publicUsers(roomId) {
+  return Array.from(getRoom(roomId).values())
+    .sort((a, b) => a.joinedAt - b.joinedAt)
+    .map(u => ({ id: u.id, name: u.name, speaking: u.speaking, joinedAt: u.joinedAt }));
+}
+function syncRoom(roomId) {
+  io.to(roomId).emit("room-users", publicUsers(roomId));
+}
 
 io.on("connection", socket => {
   socket.on("join-room", ({ roomId, name }) => {
     const room = String(roomId || "gases-belen").slice(0, 64);
-    const cleanName = String(name || "Oyente").trim().slice(0, 32) || "Oyente";
+    const userName = cleanName(name);
+
+    if (socket.data.roomId && socket.data.roomId !== room) socket.leave(socket.data.roomId);
     socket.join(room);
     socket.data.roomId = room;
-    socket.data.name = cleanName;
+    socket.data.name = userName;
 
     const state = getRoom(room);
-    state.set(socket.id, { id: socket.id, name: cleanName, speaking: false, joinedAt: Date.now() });
+    const isReconnect = state.has(socket.id);
+    state.set(socket.id, { id: socket.id, name: userName, speaking: false, joinedAt: state.get(socket.id)?.joinedAt || Date.now() });
 
-    const existing = Array.from(state.keys()).filter(id => id !== socket.id);
-    socket.emit("existing-peers", existing.map(id => ({ id, name: state.get(id)?.name || "Oyente" })));
-    socket.to(room).emit("peer-joined", { id: socket.id, name: cleanName });
-    io.to(room).emit("room-users", publicUsers(room));
+    const existing = Array.from(state.values())
+      .filter(u => u.id !== socket.id)
+      .map(u => ({ id: u.id, name: u.name }));
+
+    socket.emit("joined", { id: socket.id, roomId: room, users: publicUsers(room) });
+    socket.emit("existing-peers", existing);
+    if (!isReconnect) socket.to(room).emit("peer-joined", { id: socket.id, name: userName });
+    syncRoom(room);
+  });
+
+  socket.on("request-sync", () => {
+    const room = socket.data.roomId;
+    if (!room) return;
+    syncRoom(room);
   });
 
   socket.on("signal", ({ to, data }) => {
@@ -52,8 +80,8 @@ io.on("connection", socket => {
     const user = getRoom(room).get(socket.id);
     if (!user) return;
     user.speaking = !!value;
-    socket.to(room).emit("peer-speaking", { id: socket.id, speaking: !!value });
-    io.to(room).emit("room-users", publicUsers(room));
+    socket.to(room).emit("peer-speaking", { id: socket.id, speaking: !!value, name: user.name });
+    syncRoom(room);
   });
 
   socket.on("chat", value => {
@@ -75,9 +103,13 @@ io.on("connection", socket => {
     const state = getRoom(room);
     state.delete(socket.id);
     socket.to(room).emit("peer-left", { id: socket.id });
-    io.to(room).emit("room-users", publicUsers(room));
+    syncRoom(room);
     if (!state.size) rooms.delete(room);
   });
 });
 
-server.listen(process.env.PORT || 3000, () => console.log("Radio Teléfono activo"));
+setInterval(() => {
+  for (const roomId of rooms.keys()) syncRoom(roomId);
+}, 3000);
+
+server.listen(process.env.PORT || 3000, () => console.log("Radio Teléfono activo y sincronizado"));

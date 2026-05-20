@@ -9,6 +9,8 @@
   let localStream = null;
   let mutedOutput = false;
   let joined = false;
+  let mySocketId = null;
+  let currentName = "Oyente";
   const roomId = location.pathname.startsWith("/s/") ? decodeURIComponent(location.pathname.split("/s/")[1] || "gases-belen") : "gases-belen";
   const peers = new Map();
   const rtcConfig = { iceServers: [
@@ -25,57 +27,105 @@
     messages.scrollTop = messages.scrollHeight;
   }
   function setMainState(title, text){ modeTitle.textContent = title; modeText.textContent = text; }
+  function setStatus(text){ if(connStatus) connStatus.textContent = text; }
   function fail(text){
     joinBtn.disabled = false;
     joinBtn.textContent = "Intentar nuevamente";
-    connStatus && (connStatus.textContent = "Sin conexión");
+    setStatus("Sin conexión");
     alert(text);
   }
+  function closePeer(id){
+    const item = peers.get(id);
+    if(item?.pc) item.pc.close();
+    peers.delete(id);
+    const audio = $("audio-" + id); if(audio) audio.remove();
+  }
+  function resetPeers(){
+    for(const id of Array.from(peers.keys())) closePeer(id);
+  }
+  function joinSocketRoom(){
+    if(!socket?.connected || !joined) return;
+    socket.emit("join-room", { roomId, name: currentName });
+    setStatus("Conectado: sincronizando");
+  }
+
   function getSocket(){
     if (socket?.connected) return Promise.resolve(socket);
     return new Promise((resolve, reject) => {
       if (typeof io !== "function") return reject(new Error("Socket.IO no cargó. Este sitio debe publicarse como servidor Node, no como hosting estático."));
-      socket = io({ transports:["websocket", "polling"], timeout:9000, reconnection:true, reconnectionAttempts:10 });
-      const timer = setTimeout(() => reject(new Error("No se pudo conectar al servidor de radio.")), 10000);
+      socket = io({ transports:["websocket", "polling"], timeout:12000, reconnection:true, reconnectionAttempts:Infinity, reconnectionDelay:800, reconnectionDelayMax:3500 });
+      const timer = setTimeout(() => reject(new Error("No se pudo conectar al servidor de radio.")), 15000);
       socket.on("connect", () => { clearTimeout(timer); resolve(socket); });
       socket.on("connect_error", err => { console.warn("Socket error", err.message); });
       bindSocketEvents();
     });
   }
+
   let socketEventsBound = false;
   function bindSocketEvents(){
     if(socketEventsBound || !socket) return;
     socketEventsBound = true;
-    socket.on("existing-peers", async list => { for(const p of list) if(!peers.has(p.id)) await createPeer(p.id, true); });
-    socket.on("peer-joined", async ({ id }) => { if(joined && !peers.has(id)) await createPeer(id, false); });
-    socket.on("signal", async ({ from, data }) => {
-      let pc = peers.get(from);
-      if(!pc) pc = await createPeer(from, false);
-      if(data.description){
-        await pc.setRemoteDescription(data.description);
-        if(data.description.type === "offer"){
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          socket.emit("signal", { to: from, data: { description: pc.localDescription } });
-        }
-      } else if(data.candidate){
-        try{ await pc.addIceCandidate(data.candidate); }catch(_){ }
+
+    socket.on("connect", () => {
+      mySocketId = socket.id;
+      if(joined){
+        resetPeers();
+        joinSocketRoom();
+        addMessage("Sistema", "Conexión recuperada y sincronizada.");
       }
     });
-    socket.on("peer-left", ({ id }) => {
-      const pc = peers.get(id); if(pc) pc.close(); peers.delete(id);
-      const audio = $("audio-" + id); if(audio) audio.remove();
+
+    socket.on("joined", data => {
+      mySocketId = data.id || socket.id;
+      setStatus("Conectado: escuchando");
+      if(Array.isArray(data.users)) renderUsers(data.users);
     });
-    socket.on("room-users", users => {
-      if(!users.length){ usersBox.innerHTML = '<div class="empty">Aún no hay oyentes.</div>'; return; }
-      usersBox.innerHTML = users.map(u => `<div class="user ${u.speaking ? "speaking" : ""}">
-        <div class="avatar">${clean((u.name || "O")[0].toUpperCase())}</div>
-        <div><b>${clean(u.name)}</b><br><small>${u.speaking ? "Hablando ahora" : "Escuchando"}</small></div><i class="pulse"></i></div>`).join("");
+
+    socket.on("existing-peers", async list => {
+      for(const p of list || []) if(p.id !== mySocketId && !peers.has(p.id)) await createPeer(p.id, true);
     });
-    socket.on("peer-speaking", ({ speaking }) => setMainState(speaking ? "Alguien está hablando" : "Estás escuchando", speaking ? "Escuchas el audio en vivo automáticamente." : "Cuando alguien hable, lo escucharás automáticamente."));
+
+    socket.on("peer-joined", async ({ id }) => {
+      if(joined && id !== mySocketId && !peers.has(id)) await createPeer(id, false);
+      setTimeout(() => socket.emit("request-sync"), 500);
+    });
+
+    socket.on("signal", async ({ from, data }) => {
+      if(!from || from === mySocketId || !data) return;
+      let item = peers.get(from);
+      if(!item) item = await createPeer(from, false, true);
+      const pc = item.pc;
+      try{
+        if(data.description){
+          const offerCollision = data.description.type === "offer" && (item.makingOffer || pc.signalingState !== "stable");
+          item.ignoreOffer = !item.polite && offerCollision;
+          if(item.ignoreOffer) return;
+          await pc.setRemoteDescription(data.description);
+          if(data.description.type === "offer"){
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            socket.emit("signal", { to: from, data: { description: pc.localDescription } });
+          }
+        } else if(data.candidate){
+          try{ await pc.addIceCandidate(data.candidate); }catch(e){ if(!item.ignoreOffer) console.warn(e); }
+        }
+      }catch(e){ console.warn("Signal error", e); }
+    });
+
+    socket.on("peer-left", ({ id }) => closePeer(id));
+    socket.on("room-users", renderUsers);
+    socket.on("peer-speaking", ({ speaking, name }) => setMainState(speaking ? `${name || "Alguien"} está hablando` : "Estás escuchando", speaking ? "Escuchas el audio en vivo automáticamente." : "Cuando alguien hable, lo escucharás automáticamente."));
     socket.on("chat", m => addMessage(m.name, m.text, m.time));
-    socket.on("disconnect", () => { connStatus.textContent = "Reconectando..."; });
-    socket.on("connect", () => { if(joined) connStatus.textContent = "Conectado: escuchando"; });
+    socket.on("disconnect", () => { setStatus("Reconectando..."); resetPeers(); });
+    socket.on("reconnect", () => joinSocketRoom());
+  }
+
+  function renderUsers(users){
+    users = Array.isArray(users) ? users : [];
+    if(!users.length){ usersBox.innerHTML = '<div class="empty">Aún no hay oyentes.</div>'; return; }
+    usersBox.innerHTML = users.map(u => `<div class="user ${u.speaking ? "speaking" : ""}">
+      <div class="avatar">${clean((u.name || "O")[0].toUpperCase())}</div>
+      <div><b>${clean(u.name)}${u.id === mySocketId ? " (tú)" : ""}</b><br><small>${u.speaking ? "Hablando ahora" : "Escuchando"}</small></div><i class="pulse"></i></div>`).join("");
   }
 
   async function start(){
@@ -85,20 +135,23 @@
       await getSocket();
       localStream = await navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:true, noiseSuppression:true, autoGainControl:true }, video:false });
       localStream.getAudioTracks().forEach(t => t.enabled = false);
+      currentName = nameInput.value.trim() || "Oyente";
       joined = true;
       joinPanel.classList.add("hidden"); radioPanel.classList.remove("hidden");
-      connStatus.textContent = "Conectado: escuchando";
-      socket.emit("join-room", { roomId, name: nameInput.value.trim() || "Oyente" });
+      joinSocketRoom();
       addMessage("Sistema", "Conectado correctamente. Mantén presionado HABLAR para transmitir.");
+      setInterval(() => { if(socket?.connected && joined) socket.emit("request-sync"); }, 3000);
     }catch(e){
       console.error(e);
-      fail(e.message.includes("Socket.IO") ? "El botón no entra porque esta versión está montada en hosting estático. Súbela como servidor Node/Socket.IO para que funcione la radio en vivo." : "Activa el micrófono y entra desde HTTPS. Luego vuelve a intentar.");
+      fail(e.message.includes("Socket.IO") ? "Esta versión debe estar montada como Web Service Node/Socket.IO." : "Activa el micrófono y entra desde HTTPS. Luego vuelve a intentar.");
     }
   }
 
-  async function createPeer(peerId, initiator){
-    const pc = new RTCPeerConnection(rtcConfig);
-    peers.set(peerId, pc);
+  async function createPeer(peerId, initiator, politeOverride){
+    const polite = politeOverride ?? (String(mySocketId || socket.id) > String(peerId));
+    const item = { pc: new RTCPeerConnection(rtcConfig), makingOffer:false, ignoreOffer:false, polite };
+    const pc = item.pc;
+    peers.set(peerId, item);
     if(localStream) localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
     pc.onicecandidate = e => { if(e.candidate) socket.emit("signal", { to: peerId, data: { candidate: e.candidate } }); };
     pc.ontrack = e => {
@@ -106,17 +159,32 @@
       if(!audio){ audio = document.createElement("audio"); audio.id = "audio-" + peerId; audio.autoplay = true; audio.playsInline = true; document.body.appendChild(audio); }
       audio.srcObject = e.streams[0]; audio.muted = mutedOutput; audio.play().catch(()=>{});
     };
-    if(initiator){ const offer = await pc.createOffer(); await pc.setLocalDescription(offer); socket.emit("signal", { to: peerId, data: { description: pc.localDescription } }); }
-    return pc;
+    pc.onconnectionstatechange = () => {
+      if(["failed", "disconnected", "closed"].includes(pc.connectionState)) setTimeout(() => {
+        const current = peers.get(peerId);
+        if(current?.pc === pc && pc.connectionState !== "connected") closePeer(peerId);
+      }, 5000);
+    };
+    if(initiator){
+      try{
+        item.makingOffer = true;
+        const offer = await pc.createOffer({ offerToReceiveAudio:true });
+        await pc.setLocalDescription(offer);
+        socket.emit("signal", { to: peerId, data: { description: pc.localDescription } });
+      } finally { item.makingOffer = false; }
+    }
+    return item;
   }
+
   function setSpeaking(on){
     if(!localStream || !joined) return;
     localStream.getAudioTracks().forEach(t => t.enabled = on);
     talkBtn.classList.toggle("speaking", on);
     talkBtn.querySelector("b").textContent = on ? "TRANSMITIENDO" : "HABLAR";
     setMainState(on ? "Te están escuchando" : "Estás escuchando", on ? "Suelta el botón para dejar de transmitir." : "Cuando alguien hable, lo escucharás automáticamente.");
-    socket.emit("speaking", on);
+    if(socket?.connected) socket.emit("speaking", on);
   }
+
   joinBtn.addEventListener("click", start);
   ["mousedown","touchstart","pointerdown"].forEach(ev => talkBtn.addEventListener(ev, e => { e.preventDefault(); setSpeaking(true); }, {passive:false}));
   ["mouseup","mouseleave","touchend","touchcancel","pointerup","pointercancel"].forEach(ev => talkBtn.addEventListener(ev, e => { e.preventDefault(); setSpeaking(false); }, {passive:false}));
