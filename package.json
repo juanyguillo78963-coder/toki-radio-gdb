@@ -1,7 +1,7 @@
 {
   "name": "radio-telefono-gases-belen-pro-v2",
-  "version": "2.0.0",
-  "description": "Radio teléfono PTT por link - diseño corregido responsive",
+  "version": "3.0.0",
+  "description": "Radio teléfono PTT por link - SYNC PRO 3 RADIO FX",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

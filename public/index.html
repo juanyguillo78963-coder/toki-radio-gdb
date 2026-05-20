@@ -9,6 +9,7 @@
   <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
+  <div class="scanline"></div>
   <main class="shell">
     <section class="radio">
       <header class="topbar">
@@ -34,10 +35,11 @@
           <button id="shareBtn" class="ghost">Compartir link</button>
         </div>
 
+        <div class="radio-status-bar"><span id="radioFxStatus">EFECTO RADIO: ACTIVO</span><span id="speakerTag">Canal libre</span></div>
         <div class="visualizer">
           <div class="wave"></div>
           <button id="talkBtn" class="talk" aria-label="Mantén presionado para hablar">
-            <span>🎙️</span>
+            <span class="micIcon">📻</span>
             <b>HABLAR</b>
             <small>Mantén presionado</small>
           </button>
@@ -71,10 +73,10 @@
     </aside>
   </main>
 
-  <section class="steps">
+  <section class="steps pro3">
     <article><b>01</b><h4>Entran con link</h4><p>Sin admin visible, sin registros complicados.</p></article>
     <article><b>02</b><h4>Escuchan en vivo</h4><p>El audio llega automáticamente a todos.</p></article>
-    <article><b>03</b><h4>Hablan presionando</h4><p>Presiona para transmitir, suelta para escuchar.</p></article>
+    <article><b>03</b><h4>Sonido radio</h4><p>Beep, krrshh y voz comprimida estilo walkie-talkie.</p></article>
   </section>
 
   <script src="/app.js"></script>

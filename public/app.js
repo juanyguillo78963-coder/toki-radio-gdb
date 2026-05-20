@@ -4,11 +4,16 @@
   const talkBtn = $("talkBtn"), connStatus = $("connStatus"), modeTitle = $("modeTitle"), modeText = $("modeText");
   const usersBox = $("users"), messages = $("messages"), chatInput = $("chatInput"), sendBtn = $("sendBtn");
   const muteBtn = $("muteBtn"), shareBtn = $("shareBtn"), copyBtn = $("copyBtn");
+  const radioFxStatus = $("radioFxStatus"), speakerTag = $("speakerTag");
   let lockedByOther = false;
   let currentSpeakerName = null;
 
   let socket = null;
   let localStream = null;
+  let rawMicStream = null;
+  let audioCtx = null;
+  let fxDestination = null;
+  let radioFxReady = false;
   let mutedOutput = false;
   let joined = false;
   let mySocketId = null;
@@ -19,6 +24,92 @@
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:global.stun.twilio.com:3478" }
   ]};
+
+
+  function makeDistortionCurve(amount = 18){
+    const n = 44100;
+    const curve = new Float32Array(n);
+    const deg = Math.PI / 180;
+    for(let i = 0; i < n; i++){
+      const x = (i * 2) / n - 1;
+      curve[i] = ((3 + amount) * x * 20 * deg) / (Math.PI + amount * Math.abs(x));
+    }
+    return curve;
+  }
+
+  function makeNoiseBuffer(ctx, seconds = 0.22){
+    const buffer = ctx.createBuffer(1, Math.max(1, ctx.sampleRate * seconds), ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for(let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+    return buffer;
+  }
+
+  function playLocalBeep(freq = 880, duration = 0.08){
+    try{
+      if(!audioCtx) return;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "square";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.12, audioCtx.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(); osc.stop(audioCtx.currentTime + duration + 0.02);
+    }catch{}
+  }
+
+  function injectRadioBurst(type = "start"){
+    try{
+      if(!audioCtx || !fxDestination) return;
+      const now = audioCtx.currentTime;
+      const noise = audioCtx.createBufferSource();
+      const noiseGain = audioCtx.createGain();
+      const bp = audioCtx.createBiquadFilter();
+      bp.type = "bandpass"; bp.frequency.value = 1250; bp.Q.value = 0.8;
+      noise.buffer = makeNoiseBuffer(audioCtx, type === "start" ? 0.24 : 0.18);
+      noiseGain.gain.setValueAtTime(0.0001, now);
+      noiseGain.gain.exponentialRampToValueAtTime(type === "start" ? 0.22 : 0.16, now + 0.015);
+      noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + (type === "start" ? 0.22 : 0.16));
+      noise.connect(bp).connect(noiseGain).connect(fxDestination);
+      noise.start(now);
+
+      const osc = audioCtx.createOscillator();
+      const og = audioCtx.createGain();
+      osc.type = "square"; osc.frequency.value = type === "start" ? 900 : 520;
+      og.gain.setValueAtTime(0.0001, now);
+      og.gain.exponentialRampToValueAtTime(0.10, now + 0.01);
+      og.gain.exponentialRampToValueAtTime(0.0001, now + 0.09);
+      osc.connect(og).connect(fxDestination);
+      osc.start(now + 0.02); osc.stop(now + 0.11);
+      playLocalBeep(type === "start" ? 980 : 520, 0.07);
+    }catch(e){ console.warn("radio burst", e); }
+  }
+
+  async function buildRadioFxStream(rawStream){
+    try{
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if(audioCtx.state === "suspended") await audioCtx.resume();
+      const source = audioCtx.createMediaStreamSource(rawStream);
+      const high = audioCtx.createBiquadFilter(); high.type = "highpass"; high.frequency.value = 360;
+      const low = audioCtx.createBiquadFilter(); low.type = "lowpass"; low.frequency.value = 3100;
+      const presence = audioCtx.createBiquadFilter(); presence.type = "peaking"; presence.frequency.value = 1350; presence.Q.value = 1.4; presence.gain.value = 7;
+      const shaper = audioCtx.createWaveShaper(); shaper.curve = makeDistortionCurve(15); shaper.oversample = "2x";
+      const comp = audioCtx.createDynamicsCompressor();
+      comp.threshold.value = -34; comp.knee.value = 8; comp.ratio.value = 9; comp.attack.value = 0.004; comp.release.value = 0.16;
+      const gain = audioCtx.createGain(); gain.gain.value = 1.35;
+      fxDestination = audioCtx.createMediaStreamDestination();
+      source.connect(high).connect(low).connect(presence).connect(shaper).connect(comp).connect(gain).connect(fxDestination);
+      radioFxReady = true;
+      if(radioFxStatus) radioFxStatus.textContent = "EFECTO RADIO: WALKIE-TALKIE ACTIVO";
+      return fxDestination.stream;
+    }catch(e){
+      console.warn("No se pudo activar efecto radio", e);
+      radioFxReady = false;
+      if(radioFxStatus) radioFxStatus.textContent = "EFECTO RADIO: BÁSICO";
+      return rawStream;
+    }
+  }
 
   function clean(s){ return String(s || "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m])); }
   function addMessage(name, text, time = new Date().toLocaleTimeString("es-CO", {hour:"2-digit", minute:"2-digit"})){
@@ -122,6 +213,7 @@
       currentSpeakerName = name || "Alguien";
       lockedByOther = id !== mySocketId;
       if(lockedByOther) setBusyUI(currentSpeakerName);
+      else if(speakerTag) speakerTag.textContent = "Canal libre";
     });
     socket.on("talk-ended", ({ id }) => {
       if(id !== mySocketId){ lockedByOther = false; currentSpeakerName = null; setMainState("Estás escuchando", "Turno libre. Mantén presionado HABLAR para transmitir."); }
@@ -131,6 +223,7 @@
       lockedByOther = !!(data.speakerId && data.speakerId !== mySocketId);
       currentSpeakerName = data.speakerName || null;
       if(lockedByOther) setBusyUI(currentSpeakerName);
+      else if(speakerTag) speakerTag.textContent = "Canal libre";
     });
     socket.on("chat", m => addMessage(m.name, m.text, m.time));
     socket.on("disconnect", () => { setStatus("Reconectando..."); resetPeers(); });
@@ -138,7 +231,8 @@
   }
 
   function setBusyUI(name){
-    setMainState(`${name || "Alguien"} está hablando`, "Espera a que libere el turno para hablar. Así no se mezcla el audio.");
+    setMainState(`${name || "Alguien"} está hablando`, "Audio entrando con efecto radio. Espera a que libere el turno.");
+    if(speakerTag) speakerTag.textContent = `TRANSMITIENDO: ${name || "Alguien"}`;
     talkBtn.classList.add("busy");
     talkBtn.querySelector("b").textContent = "OCUPADO";
   }
@@ -156,8 +250,10 @@
     joinBtn.disabled = true; joinBtn.textContent = "Conectando...";
     try{
       await getSocket();
-      localStream = await navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:true, noiseSuppression:true, autoGainControl:true }, video:false });
-      localStream.getAudioTracks().forEach(t => t.enabled = false);
+      rawMicStream = await navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:true, noiseSuppression:true, autoGainControl:true }, video:false });
+      localStream = await buildRadioFxStream(rawMicStream);
+      injectRadioBurst("end");
+    setTimeout(() => localStream.getAudioTracks().forEach(t => t.enabled = false), 140);
       currentName = nameInput.value.trim() || "Oyente";
       joined = true;
       joinPanel.classList.add("hidden"); radioPanel.classList.remove("hidden");
@@ -214,20 +310,25 @@
           setBusyUI(currentSpeakerName);
           return;
         }
+        if(audioCtx?.state === "suspended") audioCtx.resume().catch(()=>{});
+        injectRadioBurst("start");
         localStream.getAudioTracks().forEach(t => t.enabled = true);
         talkBtn.classList.remove("busy");
         talkBtn.classList.add("speaking");
         talkBtn.querySelector("b").textContent = "TRANSMITIENDO";
         setMainState("Te están escuchando", "Suelta el botón para liberar el turno.");
         socket.emit("speaking", true);
+        if(speakerTag) speakerTag.textContent = "TÚ ESTÁS TRANSMITIENDO";
       });
       return;
     }
 
-    localStream.getAudioTracks().forEach(t => t.enabled = false);
+    injectRadioBurst("end");
+    setTimeout(() => localStream.getAudioTracks().forEach(t => t.enabled = false), 140);
     talkBtn.classList.remove("speaking", "busy");
     talkBtn.querySelector("b").textContent = "HABLAR";
-    setMainState("Estás escuchando", "Cuando alguien hable, lo escucharás automáticamente.");
+    setMainState("Estás escuchando", "Cuando alguien hable, lo escucharás automáticamente con efecto radio.");
+    if(speakerTag) speakerTag.textContent = "Canal libre";
     socket.emit("speaking", false);
     socket.emit("release-talk");
   }
