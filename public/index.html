@@ -4,37 +4,27 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#050914" />
-  <title>Radio Militar GDB | Gases de Belén</title>
+  <title>Radio GDB | Gases de Belén</title>
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="stylesheet" href="/style.css" />
   <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
   <div class="scanline"></div>
-  <div class="noise"></div>
-  <div class="aurora"></div>
-  <div class="particles"><i></i><i></i><i></i><i></i><i></i><i></i></div>
   <main class="shell tactical-shell">
-    <nav class="rail">
-      <div class="rail-logo">🛡️<b>KANDU</b></div>
-      <button class="rail-item active" type="button">Transmitir</button>
-      <button class="rail-item" type="button">Operadores</button>
-      <button class="rail-item" type="button">Historial</button>
-      <div class="rail-footer"><span>WebRTC</span><b>Conectado</b></div>
-    </nav>
     <section class="radio tactical-radio">
       <header class="topbar">
         <div class="brand">
           <div class="logo">▰</div>
-          <div><strong>GASES DE BELÉN</strong><span>Radio táctica PTT · Siempre contigo</span></div>
+          <div><strong>GASES DE BELÉN</strong><span>Radio privada · Siempre contigo</span></div>
         </div>
-        <div class="top-actions"><button id="installBtn" class="icon-btn hidden" type="button">Instalar</button><div class="badge"><i></i> CANAL ACTIVO</div></div>
+        <div class="top-actions"><button id="installBtn" class="icon-btn hidden" type="button">Instalar app</button><div class="badge"><i></i> EN LÍNEA</div></div>
       </header>
 
       <section id="joinPanel" class="center-card tactical-card">
         <div class="orb small-orb">📡</div>
-        <h1>Radio Ultra Sync</h1>
-        <p>PTT móvil con re‑enganche automático: si sales a WhatsApp, bloqueas pantalla o vuelves, la app se resincroniza sola.</p>
+        <h1>Radio GDB</h1>
+        <p>Entra, escucha y mantén presionado para hablar. Diseño liviano, claro y rápido para celular.</p>
         <input id="nameInput" maxlength="32" placeholder="Nombre del operador" autocomplete="name" />
         <button id="joinBtn" class="primary">Entrar a escuchar</button>
         <button id="unlockBtn" class="ghost unlock hidden" type="button">🔊 Activar sonido del celular</button>
@@ -47,21 +37,15 @@
           <button id="shareBtn" class="ghost">Compartir link</button>
         </div>
 
-        <div class="sync-banner military-sync"><b>COMANDO GDB‑01</b><span>Frecuencia única · audio táctico · reconexión automática</span></div>
-        <div class="lcd">
-          <div><small>CANAL</small><b>GDB‑01</b></div>
-          <div><small>SEÑAL</small><b id="signalLabel">ONLINE</b></div>
-          <div><small>AUDIO</small><b id="audioLabel">RADIO FX</b></div>
-          <div><small>PING</small><b id="pingLabel">-- ms</b></div>
-        </div>
+        <div class="hidden" aria-hidden="true"><span id="signalLabel">ONLINE</span><span id="audioLabel">OK</span><span id="pingLabel">-- ms</span><span id="bottomPing">-- ms</span><span id="wakeLabel">Listo</span></div>
 
-        <div class="radio-status-bar"><span id="radioFxStatus">MODO MILITAR: RADIO ACTIVO</span><span id="speakerTag">Frecuencia libre</span></div>
+        <div class="radio-status-bar"><span id="radioFxStatus">Radio lista</span><span id="speakerTag">Libre</span></div>
         <div class="live-wave" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
         <div class="visualizer tactical-visualizer">
           <div class="wave-stack"><i></i><i></i><i></i><i></i><i></i></div>
           <button id="talkBtn" class="talk" aria-label="Mantén presionado para hablar">
             <em class="onair-label">ON AIR</em>
-            <span class="micIcon">📟</span>
+            <span class="micIcon">📻</span>
             <b>HABLAR</b>
             <small>Mantén presionado</small>
           </button>
@@ -77,34 +61,27 @@
           <small>Sube esto si un celular suena muy pasito.</small>
         </div>
 
-        <div class="audio-tools">
-          <article><b>AGC</b><span>Automático</span></article>
-          <article><b>Compresor</b><span>Walkie</span></article>
-          <article><b>Limitador</b><span>Activo</span></article>
-          <article><b>Wake Lock</b><span id="wakeLabel">Listo</span></article>
+        <div class="actions action-grid">
+          <button id="muteBtn" class="ghost">Silenciar</button>
+          <button id="voxBtn" class="ghost">VOX: OFF</button>
+          <button id="recBtn" class="ghost">Grabar</button>
+          <button id="locBtn" class="ghost">Ubicación</button>
+          <button id="copyBtn" class="ghost">Copiar link</button>
         </div>
-        <div class="actions">
-          <button id="muteBtn" class="ghost">Silenciar salida</button>
-          <button id="copyBtn" class="ghost">Copiar enlace</button>
-        </div>
+        <a id="downloadRec" class="download hidden" download="radio-gdb-transmision.webm">Descargar grabación</a>
+        <div id="miniMap" class="mini-map hidden"><strong>Ubicación activa</strong><span id="locText">Esperando GPS...</span></div>
       </section>
     </section>
 
     <aside class="sidebar">
-      <section class="panel status-panel">
-        <h3>Estado táctico</h3>
-        <div class="status-grid">
-          <div><span id="countLabel">0</span><small>operadores</small></div>
-          <div><span id="turnLabel">Libre</span><small>frecuencia</small></div>
-        </div>
-      </section>
+<div class="hidden" aria-hidden="true"><span id="countLabel">0</span><span id="turnLabel">Libre</span></div>
       <section class="panel">
         <h3>Operadores conectados</h3>
         <div id="users" class="users"><div class="empty">Aún no hay oyentes.</div></div>
       </section>
 
       <section class="panel chat-panel">
-        <h3>Chat táctico</h3>
+        <h3>Chat rápido</h3>
         <div id="messages" class="messages"></div>
         <div class="chatbox">
           <input id="chatInput" placeholder="Escribe un mensaje..." />
@@ -113,16 +90,6 @@
       </section>
     </aside>
   </main>
-
-  <section class="telemetry">
-    <div><b>WebRTC</b><span>Auto repair</span></div><div><b>Latencia</b><span id="bottomPing">-- ms</span></div><div><b>Calidad</b><span>HD voz</span></div><div><b>Cifrado</b><span>AES/SRTP</span></div><div><b>Sistema</b><span>Operativo</span></div>
-  </section>
-
-  <section class="steps pro5 pro6">
-    <article><b>01</b><h4>Audio desbloqueado</h4><p>Botón especial para celulares que bloquean sonido automático.</p></article>
-    <article><b>02</b><h4>Radio FX fuerte</h4><p>Beep, krrrshh, compresión y ganancia para voz tipo radio.</p></article>
-    <article><b>03</b><h4>Reenganche móvil</h4><p>Al volver desde otra app, reconstruye audio y conexión automáticamente.</p></article>
-  </section>
 
   <script src="/app.js"></script>
 </body>

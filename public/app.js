@@ -3,7 +3,7 @@
   const joinPanel = $("joinPanel"), radioPanel = $("radioPanel"), joinBtn = $("joinBtn"), nameInput = $("nameInput");
   const talkBtn = $("talkBtn"), connStatus = $("connStatus"), modeTitle = $("modeTitle"), modeText = $("modeText");
   const usersBox = $("users"), messages = $("messages"), chatInput = $("chatInput"), sendBtn = $("sendBtn");
-  const muteBtn = $("muteBtn"), shareBtn = $("shareBtn"), copyBtn = $("copyBtn");
+  const muteBtn = $("muteBtn"), shareBtn = $("shareBtn"), copyBtn = $("copyBtn"), voxBtn = $("voxBtn"), recBtn = $("recBtn"), locBtn = $("locBtn"), downloadRec = $("downloadRec"), miniMap = $("miniMap"), locText = $("locText");
   const radioFxStatus = $("radioFxStatus"), speakerTag = $("speakerTag"), unlockBtn = $("unlockBtn");
   const volumeSlider = $("volumeSlider"), countLabel = $("countLabel"), turnLabel = $("turnLabel"), signalLabel = $("signalLabel"), audioLabel = $("audioLabel");
   const pingLabel = $("pingLabel"), bottomPing = $("bottomPing"), wakeLabel = $("wakeLabel"), installBtn = $("installBtn");
@@ -35,6 +35,8 @@
   let wakeLock = null;
   let deferredInstallPrompt = null;
   let batteryPct = null;
+  let voxEnabled = false, voxTimer = null, voxSpeaking = false, analyser = null, analyserData = null;
+  let mediaRecorder = null, recordingChunks = [], isRecording = false;
   const peers = new Map();
   const rtcConfig = { iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
@@ -261,6 +263,97 @@
     }catch(e){ showUnlockAudio(); }
   }
 
+
+  function playBusyTone(){
+    try{
+      if(!audioCtx) return;
+      playLocalBeep(260, 0.07);
+      setTimeout(() => playLocalBeep(220, 0.07), 95);
+    }catch{}
+  }
+
+  function setupVoxMeter(){
+    try{
+      if(!audioCtx || !rawMicStream) return;
+      const mic = audioCtx.createMediaStreamSource(rawMicStream);
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.72;
+      analyserData = new Uint8Array(analyser.frequencyBinCount);
+      mic.connect(analyser);
+    }catch(e){ console.warn('vox meter', e); }
+  }
+
+  function getVoiceLevel(){
+    if(!analyser || !analyserData) return 0;
+    analyser.getByteTimeDomainData(analyserData);
+    let sum = 0;
+    for(const v of analyserData){ const x = (v - 128) / 128; sum += x * x; }
+    return Math.sqrt(sum / analyserData.length);
+  }
+
+  function startVoxLoop(){
+    clearInterval(voxTimer);
+    if(!voxEnabled) return;
+    voxTimer = setInterval(() => {
+      if(!joined || lockedByOther || document.hidden) return;
+      const level = getVoiceLevel();
+      if(level > 0.055 && !voxSpeaking){ voxSpeaking = true; setSpeaking(true); }
+      if(level < 0.026 && voxSpeaking){
+        setTimeout(() => {
+          if(getVoiceLevel() < 0.03 && voxSpeaking){ voxSpeaking = false; setSpeaking(false); }
+        }, 520);
+      }
+    }, 160);
+  }
+
+  function toggleVox(){
+    voxEnabled = !voxEnabled;
+    if(voxBtn){ voxBtn.textContent = voxEnabled ? 'VOX: ON' : 'VOX: OFF'; voxBtn.classList.toggle('active', voxEnabled); }
+    talkBtn.classList.toggle('vox', voxEnabled);
+    if(voxEnabled){ setupVoxMeter(); startVoxLoop(); addMessage('Sistema', 'VOX activado: habla y la radio transmite sola.'); }
+    else { clearInterval(voxTimer); if(voxSpeaking){ voxSpeaking = false; setSpeaking(false); } addMessage('Sistema', 'VOX desactivado.'); }
+  }
+
+  function toggleRecording(){
+    try{
+      if(isRecording){
+        mediaRecorder?.stop();
+        return;
+      }
+      const stream = rawMicStream || localStream;
+      if(!stream) return addMessage('Sistema', 'Primero entra a la radio para grabar.');
+      recordingChunks = [];
+      mediaRecorder = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm' });
+      mediaRecorder.ondataavailable = e => { if(e.data && e.data.size) recordingChunks.push(e.data); };
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(recordingChunks, { type: 'audio/webm' });
+        if(downloadRec){
+          downloadRec.href = URL.createObjectURL(blob);
+          downloadRec.classList.remove('hidden');
+        }
+        isRecording = false;
+        if(recBtn){ recBtn.textContent = 'Grabar'; recBtn.classList.remove('active'); }
+        addMessage('Sistema', 'Grabación lista para descargar.');
+      };
+      mediaRecorder.start(1000);
+      isRecording = true;
+      if(recBtn){ recBtn.textContent = 'Grabando'; recBtn.classList.add('active'); }
+      addMessage('Sistema', 'Grabación iniciada en este celular.');
+    }catch(e){ addMessage('Sistema', 'Este celular no permitió grabar audio.'); }
+  }
+
+  function shareLocation(){
+    if(!navigator.geolocation) return addMessage('Sistema', 'Este celular no soporta ubicación.');
+    if(miniMap) miniMap.classList.remove('hidden');
+    navigator.geolocation.getCurrentPosition(pos => {
+      const { latitude, longitude } = pos.coords;
+      const link = `https://maps.google.com/?q=${latitude.toFixed(6)},${longitude.toFixed(6)}`;
+      if(locText) locText.innerHTML = `<a style="color:#62ff7b" href="${link}" target="_blank" rel="noopener">Ver ubicación del operador</a>`;
+      socket?.emit('chat', `📍 Ubicación: ${link}`);
+    }, () => addMessage('Sistema', 'No se permitió usar GPS.'), { enableHighAccuracy:true, timeout:9000, maximumAge:30000 });
+  }
+
   function startWatchdogs(){
     clearInterval(heartbeatTimer); clearInterval(peerRepairTimer); clearInterval(pingTimer);
     heartbeatTimer = setInterval(() => {
@@ -416,6 +509,7 @@
   }
 
   function setBusyUI(name){
+    playBusyTone();
     setMainState(`${name || "Alguien"} está hablando`, "Audio entrando con efecto radio. Espera a que libere el turno.");
     if(speakerTag) speakerTag.textContent = `TRANSMITIENDO: ${name || "Alguien"}`;
     if(turnLabel) turnLabel.textContent = name || "Ocupado";
@@ -428,12 +522,10 @@
     users = Array.isArray(users) ? users : [];
     if(!users.length){ usersBox.innerHTML = '<div class="empty">Aún no hay oyentes.</div>'; return; }
     usersBox.innerHTML = users.map(u => {
-      const ping = u.id === mySocketId ? (pingLabel?.textContent || "-- ms") : `${35 + Math.floor(Math.random()*28)} ms`;
-      const battery = u.id === mySocketId && batteryPct ? `${batteryPct}%` : `${72 + Math.floor(Math.random()*24)}%`;
       return `<div class="user ${u.speaking ? "speaking" : ""}">
         <div class="avatar">${clean((u.name || "O")[0].toUpperCase())}</div>
-        <div><b>${clean(u.name)}${u.id === mySocketId ? " (tú)" : ""}</b><br><small>${u.speaking ? "🎤 Transmitiendo" : "Escuchando"}</small><div class="user-meta"><small>Ping ${ping}</small><small>Batería ${battery}</small></div></div>
-        <div class="signal-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></div><i class="pulse"></i></div>`;
+        <div><b>${clean(u.name)}${u.id === mySocketId ? " (tú)" : ""}</b><br><small>${u.speaking ? "🎤 Transmitiendo" : "Escuchando"}</small></div>
+        <i class="pulse"></i></div>`;
     }).join("");
   }
 
@@ -447,6 +539,7 @@
       await getSocket();
       rawMicStream = await navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:true, noiseSuppression:true, autoGainControl:true, channelCount:1, sampleRate:48000 }, video:false });
       localStream = await buildRadioFxStream(rawMicStream);
+      setupVoxMeter();
       localStream.getAudioTracks().forEach(t => t.enabled = true);
       injectRadioBurst("end");
       setTimeout(() => localStream.getAudioTracks().forEach(t => t.enabled = false), 220);
@@ -507,6 +600,7 @@
 
     if(on){
       if(lockedByOther){
+        playBusyTone();
         setBusyUI(currentSpeakerName || "Otro usuario");
         return;
       }
@@ -570,6 +664,9 @@
   window.addEventListener("keyup", e => { if(e.code === "Space" && !["INPUT","TEXTAREA"].includes(document.activeElement.tagName)) setSpeaking(false); });
   function sendChat(){ const text = chatInput.value.trim(); if(!text || !socket?.connected) return; socket.emit("chat", text); chatInput.value = ""; }
   sendBtn.onclick = sendChat; chatInput.addEventListener("keydown", e => { if(e.key === "Enter") sendChat(); });
+  if(voxBtn) voxBtn.onclick = toggleVox;
+  if(recBtn) recBtn.onclick = toggleRecording;
+  if(locBtn) locBtn.onclick = shareLocation;
   muteBtn.onclick = () => { mutedOutput = !mutedOutput; document.querySelectorAll("audio").forEach(a => { a.muted = mutedOutput; a.volume = 1; if(!mutedOutput) forceAudioPlay(a); }); muteBtn.textContent = mutedOutput ? "Activar salida" : "Silenciar salida"; };
   async function copyLink(){ const url = location.origin + "/s/" + roomId; await navigator.clipboard.writeText(url); addMessage("Sistema", "Enlace copiado."); }
   copyBtn.onclick = copyLink;

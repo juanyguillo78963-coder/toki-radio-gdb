@@ -1,24 +1,18 @@
-# Radio Militar GDB — Gases de Belén
+# Radio Teléfono GDB - Militar Liviana PRO
 
-Versión militar minimalista: una sola frecuencia GDB‑01, PTT grande, operadores conectados, audio radio FX, reconexión móvil y PWA instalable.
+Versión limpia y rápida: una sola frecuencia, PTT, VOX manos libres, sonido tipo radio, wake lock, PWA instalable, reconexión automática, grabación local y botón de ubicación.
 
-## Probar local
+## Ejecutar local
 ```bash
 npm install
 npm start
 ```
-Abre: http://localhost:3000
+Abrir: http://localhost:3000/s/gases-belen
 
 ## Subir a Render
-1. Sube esta carpeta a GitHub.
-2. En Render: New > Web Service.
-3. Conecta el repositorio.
-4. Build command: `npm install`
-5. Start command: `npm start`
-6. Deploy.
+Build command: `npm install`
+Start command: `npm start`
 
-## Usar como app en celular
-- Android Chrome: abrir la URL > menú ⋮ > Agregar a pantalla principal / Instalar app.
-- iPhone Safari: abrir la URL > compartir > Agregar a pantalla de inicio.
-
-Nota: en iPhone la app debe abrirse desde Safari para instalarse como acceso tipo app.
+## Instalar como app
+Android Chrome: menú ⋮ > Instalar app.
+iPhone Safari: compartir > Agregar a pantalla de inicio.
