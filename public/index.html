@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#050914" />
+  <title>Radio Teléfono | Gases de Belén</title>
+  <link rel="stylesheet" href="/style.css" />
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+  <main class="shell">
+    <section class="radio">
+      <header class="topbar">
+        <div class="brand">
+          <div class="logo">▰</div>
+          <div><strong>GASES DE BELÉN</strong><span>Siempre contigo</span></div>
+        </div>
+        <div class="badge"><i></i> EN VIVO</div>
+      </header>
+
+      <section id="joinPanel" class="center-card">
+        <div class="orb small-orb">🎧</div>
+        <h1>Radio Teléfono</h1>
+        <p>Abre el link, escucha en vivo y habla manteniendo presionado el botón.</p>
+        <input id="nameInput" maxlength="32" placeholder="Escribe tu nombre" autocomplete="name" />
+        <button id="joinBtn" class="primary">Entrar a escuchar</button>
+        <small>Permite el micrófono para poder hablar.</small>
+      </section>
+
+      <section id="radioPanel" class="onair hidden">
+        <div class="session-row">
+          <span id="connStatus">Conectando...</span>
+          <button id="shareBtn" class="ghost">Compartir link</button>
+        </div>
+
+        <div class="visualizer">
+          <div class="wave"></div>
+          <button id="talkBtn" class="talk" aria-label="Mantén presionado para hablar">
+            <span>🎙️</span>
+            <b>HABLAR</b>
+            <small>Mantén presionado</small>
+          </button>
+          <div class="wave purple"></div>
+        </div>
+
+        <h2 id="modeTitle">Estás escuchando</h2>
+        <p id="modeText">Cuando alguien hable, lo escucharás automáticamente.</p>
+
+        <div class="actions">
+          <button id="muteBtn" class="ghost">Silenciar salida</button>
+          <button id="copyBtn" class="ghost">Copiar enlace</button>
+        </div>
+      </section>
+    </section>
+
+    <aside class="sidebar">
+      <section class="panel">
+        <h3>Conectados</h3>
+        <div id="users" class="users"><div class="empty">Aún no hay oyentes.</div></div>
+      </section>
+
+      <section class="panel chat-panel">
+        <h3>Chat rápido</h3>
+        <div id="messages" class="messages"></div>
+        <div class="chatbox">
+          <input id="chatInput" placeholder="Escribe un mensaje..." />
+          <button id="sendBtn">➤</button>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <section class="steps">
+    <article><b>01</b><h4>Entran con link</h4><p>Sin admin visible, sin registros complicados.</p></article>
+    <article><b>02</b><h4>Escuchan en vivo</h4><p>El audio llega automáticamente a todos.</p></article>
+    <article><b>03</b><h4>Hablan presionando</h4><p>Presiona para transmitir, suelta para escuchar.</p></article>
+  </section>
+
+  <script src="/app.js"></script>
+</body>
+</html>
