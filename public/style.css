@@ -24,3 +24,85 @@ body:before{animation:slowBg 14s ease-in-out infinite alternate;filter:saturate(
 @media(max-width:1180px){.shell{grid-template-columns:1fr 360px}.rail{display:none}.telemetry{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:980px){.shell{grid-template-columns:1fr}.telemetry{grid-template-columns:repeat(2,1fr);padding:12px}.lcd{grid-template-columns:repeat(2,1fr)}.audio-tools{grid-template-columns:repeat(2,1fr)}.channel-tabs{justify-content:flex-start}.chat-panel{display:flex!important}}
 @media(max-width:520px){.radio{padding:12px}.topbar{position:sticky;top:8px;z-index:4}.top-actions{display:none}.onair{margin-top:12px}.lcd{grid-template-columns:1fr 1fr}.lcd b{font-size:15px}.channel-tabs button{font-size:12px;padding:10px}.live-wave{height:40px}.talk{width:min(76vw,250px)!important;height:min(76vw,250px)!important}.audio-tools{grid-template-columns:1fr 1fr}.telemetry{display:none}.steps{display:none}.panel{border-radius:20px}.messages{max-height:290px}.chat-panel{min-height:360px}.volume-card{position:relative}.actions{position:sticky;bottom:8px;z-index:3}.ghost{background:rgba(8,20,38,.92);backdrop-filter:blur(15px)}}
+
+
+/* =========================================================
+   KANDU MILITARY MINIMAL — una sola frecuencia, sin canales
+   ========================================================= */
+:root{
+  --green:#a7ff3f;
+  --green2:#6dff1f;
+  --olive:#283312;
+  --army:#11170b;
+  --panel:#080d07;
+  --line:rgba(167,255,63,.28);
+  --amber:#ffc94a;
+}
+body{background:#030501;color:#f4f8df;}
+body:before{background:
+  radial-gradient(circle at 20% 0%,rgba(128,255,31,.12),transparent 28%),
+  radial-gradient(circle at 90% 20%,rgba(255,201,74,.08),transparent 27%),
+  linear-gradient(160deg,#030501,#0a1007 45%,#020300)!important;}
+body:after{background:
+  linear-gradient(rgba(167,255,63,.035) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(167,255,63,.026) 1px,transparent 1px),
+  repeating-linear-gradient(135deg,rgba(255,255,255,.018) 0 2px,transparent 2px 16px)!important;
+  background-size:34px 34px,34px 34px,100% 100%!important;}
+.aurora{background:radial-gradient(circle at 50% 20%,rgba(167,255,63,.12),transparent 27%),radial-gradient(circle at 70% 80%,rgba(98,126,42,.13),transparent 35%)!important;}
+.radio,.panel,.steps article,.telemetry,.rail,.center-card,.onair{
+  border-color:rgba(167,255,63,.22)!important;
+  background:linear-gradient(145deg,rgba(10,15,8,.88),rgba(3,5,2,.78))!important;
+  box-shadow:0 28px 90px rgba(0,0,0,.82), inset 0 1px 0 rgba(255,255,255,.06), 0 0 38px rgba(167,255,63,.055)!important;
+}
+.radio:after{background:linear-gradient(140deg,transparent 0 45%,rgba(167,255,63,.07) 45%,transparent 72%)!important;}
+.logo,.rail-logo{background:linear-gradient(135deg,#2d3d16,#050804)!important;border:1px solid rgba(167,255,63,.32);box-shadow:inset 0 0 25px rgba(167,255,63,.08),0 0 28px rgba(167,255,63,.08)}
+.logo{clip-path:polygon(50% 0,94% 25%,94% 75%,50% 100%,6% 75%,6% 25%);border-radius:12px!important;color:#b9ff4d;}
+.brand strong,.panel h3{letter-spacing:.08em;text-transform:uppercase;}
+.brand span,p,small{color:#b9c1a9!important;}
+.badge,.sync-banner,.radio-status-bar span,.status-grid div,.volume-card,.audio-tools article,.user,.chatbox input,.ghost,.lcd div{
+  border-color:rgba(167,255,63,.25)!important;
+  background:linear-gradient(180deg,rgba(20,30,12,.72),rgba(4,8,3,.72))!important;
+}
+.badge{color:#dfff9a!important;box-shadow:0 0 28px rgba(167,255,63,.15)!important;}
+.badge i,.particles i{background:#a7ff3f!important;box-shadow:0 0 18px #a7ff3f!important;}
+.channel-tabs{display:none!important;}
+.military-sync{position:relative;text-align:left;overflow:hidden;}
+.military-sync:before{content:"";position:absolute;right:18px;top:50%;width:54px;height:54px;transform:translateY(-50%);border:1px solid rgba(167,255,63,.28);clip-path:polygon(50% 0,94% 25%,94% 75%,50% 100%,6% 75%,6% 25%);background:radial-gradient(circle,rgba(167,255,63,.20),transparent 68%)}
+.military-sync b{color:#b9ff4d;letter-spacing:.22em;}
+.lcd{grid-template-columns:repeat(4,1fr)!important;}
+.lcd small{color:#b9ff4d!important}.lcd b{color:#fffce7!important;}
+.live-wave{background:linear-gradient(90deg,transparent,rgba(167,255,63,.11),transparent)!important;border:1px solid rgba(167,255,63,.12)}
+.live-wave span,.wave-stack i,.vu span{background:linear-gradient(to top,#a7ff3f,#e8ff8a)!important;box-shadow:0 0 18px rgba(167,255,63,.48)!important;}
+.talk{background:radial-gradient(circle,#314315,#111909 58%,#030501 73%)!important;border-color:#a7ff3f!important;box-shadow:0 0 0 14px rgba(167,255,63,.10),0 0 82px rgba(167,255,63,.33), inset 0 0 40px rgba(167,255,63,.08)!important;}
+.talk:before{border-color:rgba(167,255,63,.45)!important;}
+.talk b{font-size:31px;letter-spacing:.04em;color:#d9ff78;text-shadow:0 0 22px rgba(167,255,63,.65)}
+.talk span{filter:drop-shadow(0 0 16px rgba(167,255,63,.75)) grayscale(.2)}
+.talk .onair-label{color:rgba(230,255,166,.72)!important;}
+.talk.speaking{background:radial-gradient(circle,#657f19,#1a2209 60%,#070901 78%)!important;border-color:#f0ff45!important;box-shadow:0 0 0 18px rgba(240,255,69,.14),0 0 100px rgba(240,255,69,.55)!important;}
+.talk.speaking .onair-label{background:rgba(167,255,63,.18)!important;border-color:rgba(240,255,69,.55)!important;color:#fff!important;}
+.status-grid span,#connStatus,.session-row span,.audio-tools b,.telemetry span,.rail-footer b{color:#b9ff4d!important;}
+.chatbox button,.primary{background:linear-gradient(135deg,#a7ff3f,#4e7d16)!important;color:#071005!important;box-shadow:0 0 32px rgba(167,255,63,.20)!important;}
+.rail-item.active{background:linear-gradient(135deg,rgba(167,255,63,.22),rgba(167,255,63,.05))!important;border-color:rgba(167,255,63,.55)!important;color:#cfff74!important;}
+.avatar{background:linear-gradient(135deg,#a7ff3f,#273a12)!important;color:#071005!important;box-shadow:0 0 22px rgba(167,255,63,.22)}
+.signal-bars i{background:#a7ff3f!important;box-shadow:0 0 8px rgba(167,255,63,.65)!important;}
+.bottom-nav{display:none}
+@media(max-width:1180px){.rail{display:none!important}}
+@media(max-width:980px){.shell{padding:10px!important}.radio{min-height:0!important}.center-card,.onair{max-width:100%;}.lcd{grid-template-columns:repeat(2,1fr)!important}.sidebar{gap:12px}.chat-panel{display:flex!important}}
+@media(max-width:520px){
+  body{padding-bottom:80px;}
+  .shell{padding:8px!important;gap:12px!important;}
+  .radio{border-radius:24px!important;padding:14px!important;}
+  .topbar{top:0!important;border:1px solid rgba(167,255,63,.18);border-radius:20px;padding:14px;background:rgba(6,10,4,.82);backdrop-filter:blur(18px)}
+  .brand{gap:10px}.logo{width:44px;height:44px}.brand strong{font-size:15px}.brand span{font-size:12px}.top-actions{display:none!important}
+  .onair{padding:16px!important;margin-top:14px!important;border-radius:24px!important;}
+  .session-row{display:grid;grid-template-columns:1fr;gap:10px;text-align:center}.session-row .ghost{width:100%;}
+  .sync-banner{padding:17px!important;border-radius:18px!important;}
+  .lcd div{padding:14px 8px!important}.lcd b{font-size:18px!important}.lcd small{font-size:10px!important}
+  .radio-status-bar{display:grid!important;grid-template-columns:1fr!important}.radio-status-bar span{text-align:center;}
+  .visualizer{grid-template-columns:1fr!important;margin:18px 0!important}.wave-stack,.vu{display:none!important;}
+  .talk{width:min(82vw,310px)!important;height:min(82vw,310px)!important;margin:auto;}
+  .talk b{font-size:34px!important}.talk span{font-size:54px!important;}
+  h2{font-size:28px;margin:8px 0 4px}.volume-card{padding:18px!important}.actions{position:static!important;display:grid!important;grid-template-columns:1fr!important}
+  .audio-tools{display:none!important;}.telemetry,.steps{display:none!important;}
+  .panel{border-radius:22px!important;padding:18px!important}.chat-panel{display:none!important}.status-grid{grid-template-columns:1fr 1fr!important}
+}
