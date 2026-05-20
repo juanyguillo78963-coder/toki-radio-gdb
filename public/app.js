@@ -4,6 +4,8 @@
   const talkBtn = $("talkBtn"), connStatus = $("connStatus"), modeTitle = $("modeTitle"), modeText = $("modeText");
   const usersBox = $("users"), messages = $("messages"), chatInput = $("chatInput"), sendBtn = $("sendBtn");
   const muteBtn = $("muteBtn"), shareBtn = $("shareBtn"), copyBtn = $("copyBtn");
+  let lockedByOther = false;
+  let currentSpeakerName = null;
 
   let socket = null;
   let localStream = null;
@@ -79,6 +81,7 @@
       mySocketId = data.id || socket.id;
       setStatus("Conectado: escuchando");
       if(Array.isArray(data.users)) renderUsers(data.users);
+      if(data.speakerId && data.speakerId !== mySocketId){ lockedByOther = true; currentSpeakerName = data.speakerName || "Otro usuario"; setBusyUI(currentSpeakerName); }
     });
 
     socket.on("existing-peers", async list => {
@@ -113,11 +116,31 @@
     });
 
     socket.on("peer-left", ({ id }) => closePeer(id));
-    socket.on("room-users", renderUsers);
-    socket.on("peer-speaking", ({ speaking, name }) => setMainState(speaking ? `${name || "Alguien"} está hablando` : "Estás escuchando", speaking ? "Escuchas el audio en vivo automáticamente." : "Cuando alguien hable, lo escucharás automáticamente."));
+    
+    socket.on("peer-speaking", ({ speaking, name }) => { if(speaking) setBusyUI(name || "Alguien"); });
+    socket.on("talk-started", ({ id, name }) => {
+      currentSpeakerName = name || "Alguien";
+      lockedByOther = id !== mySocketId;
+      if(lockedByOther) setBusyUI(currentSpeakerName);
+    });
+    socket.on("talk-ended", ({ id }) => {
+      if(id !== mySocketId){ lockedByOther = false; currentSpeakerName = null; setMainState("Estás escuchando", "Turno libre. Mantén presionado HABLAR para transmitir."); }
+    });
+    socket.on("room-state", data => {
+      if(Array.isArray(data.users)) renderUsers(data.users);
+      lockedByOther = !!(data.speakerId && data.speakerId !== mySocketId);
+      currentSpeakerName = data.speakerName || null;
+      if(lockedByOther) setBusyUI(currentSpeakerName);
+    });
     socket.on("chat", m => addMessage(m.name, m.text, m.time));
     socket.on("disconnect", () => { setStatus("Reconectando..."); resetPeers(); });
     socket.on("reconnect", () => joinSocketRoom());
+  }
+
+  function setBusyUI(name){
+    setMainState(`${name || "Alguien"} está hablando`, "Espera a que libere el turno para hablar. Así no se mezcla el audio.");
+    talkBtn.classList.add("busy");
+    talkBtn.querySelector("b").textContent = "OCUPADO";
   }
 
   function renderUsers(users){
@@ -140,7 +163,7 @@
       joinPanel.classList.add("hidden"); radioPanel.classList.remove("hidden");
       joinSocketRoom();
       addMessage("Sistema", "Conectado correctamente. Mantén presionado HABLAR para transmitir.");
-      setInterval(() => { if(socket?.connected && joined) socket.emit("request-sync"); }, 3000);
+      setInterval(() => { if(socket?.connected && joined) socket.emit("request-sync"); }, 2500);
     }catch(e){
       console.error(e);
       fail(e.message.includes("Socket.IO") ? "Esta versión debe estar montada como Web Service Node/Socket.IO." : "Activa el micrófono y entra desde HTTPS. Luego vuelve a intentar.");
@@ -177,12 +200,36 @@
   }
 
   function setSpeaking(on){
-    if(!localStream || !joined) return;
-    localStream.getAudioTracks().forEach(t => t.enabled = on);
-    talkBtn.classList.toggle("speaking", on);
-    talkBtn.querySelector("b").textContent = on ? "TRANSMITIENDO" : "HABLAR";
-    setMainState(on ? "Te están escuchando" : "Estás escuchando", on ? "Suelta el botón para dejar de transmitir." : "Cuando alguien hable, lo escucharás automáticamente.");
-    if(socket?.connected) socket.emit("speaking", on);
+    if(!localStream || !joined || !socket?.connected) return;
+
+    if(on){
+      if(lockedByOther){
+        setBusyUI(currentSpeakerName || "Otro usuario");
+        return;
+      }
+      socket.timeout(2500).emit("request-talk", (err, res) => {
+        if(err || !res?.ok){
+          lockedByOther = !!res?.busy;
+          currentSpeakerName = res?.speakerName || currentSpeakerName || "Otro usuario";
+          setBusyUI(currentSpeakerName);
+          return;
+        }
+        localStream.getAudioTracks().forEach(t => t.enabled = true);
+        talkBtn.classList.remove("busy");
+        talkBtn.classList.add("speaking");
+        talkBtn.querySelector("b").textContent = "TRANSMITIENDO";
+        setMainState("Te están escuchando", "Suelta el botón para liberar el turno.");
+        socket.emit("speaking", true);
+      });
+      return;
+    }
+
+    localStream.getAudioTracks().forEach(t => t.enabled = false);
+    talkBtn.classList.remove("speaking", "busy");
+    talkBtn.querySelector("b").textContent = "HABLAR";
+    setMainState("Estás escuchando", "Cuando alguien hable, lo escucharás automáticamente.");
+    socket.emit("speaking", false);
+    socket.emit("release-talk");
   }
 
   joinBtn.addEventListener("click", start);

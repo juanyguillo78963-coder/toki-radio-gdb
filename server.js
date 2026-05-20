@@ -8,65 +8,94 @@ const { Server } = require("socket.io");
 const app = express();
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 app.use(compression());
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static(path.join(__dirname, "public"), { maxAge: "30s" }));
 
 app.get("/", (_, res) => res.redirect("/s/gases-belen"));
 app.get("/s/:room", (_, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
-app.get("/health", (_, res) => res.json({ ok: true, name: "Radio Telefono GDB" }));
+app.get("/health", (_, res) => res.json({ ok: true, version: "SYNC-PRO-2", name: "Radio Telefono GDB" }));
 
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: "*" },
   transports: ["websocket", "polling"],
-  pingInterval: 10000,
-  pingTimeout: 25000,
+  pingInterval: 8000,
+  pingTimeout: 24000,
   maxHttpBufferSize: 1e7
 });
 
 const rooms = new Map();
 function getRoom(id) {
-  if (!rooms.has(id)) rooms.set(id, new Map());
+  if (!rooms.has(id)) rooms.set(id, { users: new Map(), speakerId: null, speakerName: null, seq: 0 });
   return rooms.get(id);
 }
 function cleanName(name) {
   return String(name || "Oyente").trim().slice(0, 32) || "Oyente";
 }
 function publicUsers(roomId) {
-  return Array.from(getRoom(roomId).values())
+  const room = getRoom(roomId);
+  return Array.from(room.users.values())
     .sort((a, b) => a.joinedAt - b.joinedAt)
-    .map(u => ({ id: u.id, name: u.name, speaking: u.speaking, joinedAt: u.joinedAt }));
+    .map(u => ({ id: u.id, name: u.name, speaking: room.speakerId === u.id, joinedAt: u.joinedAt, online: true }));
 }
 function syncRoom(roomId) {
-  io.to(roomId).emit("room-users", publicUsers(roomId));
+  const room = getRoom(roomId);
+  io.to(roomId).emit("room-state", {
+    seq: ++room.seq,
+    users: publicUsers(roomId),
+    speakerId: room.speakerId,
+    speakerName: room.speakerName,
+    count: room.users.size,
+    serverTime: Date.now()
+  });
+}
+function releaseSpeaker(roomId, socketId) {
+  const room = getRoom(roomId);
+  if (room.speakerId === socketId) {
+    room.speakerId = null;
+    room.speakerName = null;
+    io.to(roomId).emit("talk-ended", { id: socketId });
+    syncRoom(roomId);
+  }
 }
 
 io.on("connection", socket => {
   socket.on("join-room", ({ roomId, name }) => {
-    const room = String(roomId || "gases-belen").slice(0, 64);
+    const roomName = String(roomId || "gases-belen").replace(/[^a-zA-Z0-9-_]/g, "").slice(0, 64) || "gases-belen";
     const userName = cleanName(name);
 
-    if (socket.data.roomId && socket.data.roomId !== room) socket.leave(socket.data.roomId);
-    socket.join(room);
-    socket.data.roomId = room;
+    if (socket.data.roomId && socket.data.roomId !== roomName) {
+      releaseSpeaker(socket.data.roomId, socket.id);
+      socket.leave(socket.data.roomId);
+    }
+
+    socket.join(roomName);
+    socket.data.roomId = roomName;
     socket.data.name = userName;
+    socket.data.lastSeen = Date.now();
 
-    const state = getRoom(room);
-    const isReconnect = state.has(socket.id);
-    state.set(socket.id, { id: socket.id, name: userName, speaking: false, joinedAt: state.get(socket.id)?.joinedAt || Date.now() });
+    const room = getRoom(roomName);
+    room.users.set(socket.id, {
+      id: socket.id,
+      name: userName,
+      joinedAt: room.users.get(socket.id)?.joinedAt || Date.now(),
+      lastSeen: Date.now()
+    });
 
-    const existing = Array.from(state.values())
+    const existing = Array.from(room.users.values())
       .filter(u => u.id !== socket.id)
       .map(u => ({ id: u.id, name: u.name }));
 
-    socket.emit("joined", { id: socket.id, roomId: room, users: publicUsers(room) });
+    socket.emit("joined", { id: socket.id, roomId: roomName, users: publicUsers(roomName), speakerId: room.speakerId, speakerName: room.speakerName });
     socket.emit("existing-peers", existing);
-    if (!isReconnect) socket.to(room).emit("peer-joined", { id: socket.id, name: userName });
-    syncRoom(room);
+    socket.to(roomName).emit("peer-joined", { id: socket.id, name: userName });
+    syncRoom(roomName);
   });
 
   socket.on("request-sync", () => {
     const room = socket.data.roomId;
     if (!room) return;
+    const user = getRoom(room).users.get(socket.id);
+    if (user) user.lastSeen = Date.now();
     syncRoom(room);
   });
 
@@ -74,14 +103,39 @@ io.on("connection", socket => {
     if (to && data) io.to(to).emit("signal", { from: socket.id, data });
   });
 
-  socket.on("speaking", value => {
+  socket.on("request-talk", ack => {
+    const roomId = socket.data.roomId;
+    if (!roomId) return typeof ack === "function" && ack({ ok: false, reason: "No estás conectado" });
+    const room = getRoom(roomId);
+    const user = room.users.get(socket.id);
+    if (!user) return typeof ack === "function" && ack({ ok: false, reason: "Usuario no encontrado" });
+
+    if (room.speakerId && room.speakerId !== socket.id) {
+      return typeof ack === "function" && ack({ ok: false, busy: true, speakerId: room.speakerId, speakerName: room.speakerName || "Otro usuario" });
+    }
+
+    room.speakerId = socket.id;
+    room.speakerName = user.name;
+    io.to(roomId).emit("talk-started", { id: socket.id, name: user.name });
+    syncRoom(roomId);
+    return typeof ack === "function" && ack({ ok: true });
+  });
+
+  socket.on("release-talk", () => {
     const room = socket.data.roomId;
-    if (!room) return;
-    const user = getRoom(room).get(socket.id);
+    if (room) releaseSpeaker(room, socket.id);
+  });
+
+  socket.on("speaking", value => {
+    const roomId = socket.data.roomId;
+    if (!roomId) return;
+    const room = getRoom(roomId);
+    const user = room.users.get(socket.id);
     if (!user) return;
-    user.speaking = !!value;
-    socket.to(room).emit("peer-speaking", { id: socket.id, speaking: !!value, name: user.name });
-    syncRoom(room);
+    if (value && room.speakerId !== socket.id) return;
+    if (!value) return releaseSpeaker(roomId, socket.id);
+    io.to(roomId).emit("peer-speaking", { id: socket.id, speaking: true, name: user.name });
+    syncRoom(roomId);
   });
 
   socket.on("chat", value => {
@@ -98,18 +152,30 @@ io.on("connection", socket => {
   });
 
   socket.on("disconnect", () => {
-    const room = socket.data.roomId;
-    if (!room) return;
-    const state = getRoom(room);
-    state.delete(socket.id);
-    socket.to(room).emit("peer-left", { id: socket.id });
-    syncRoom(room);
-    if (!state.size) rooms.delete(room);
+    const roomId = socket.data.roomId;
+    if (!roomId) return;
+    const room = getRoom(roomId);
+    releaseSpeaker(roomId, socket.id);
+    room.users.delete(socket.id);
+    socket.to(roomId).emit("peer-left", { id: socket.id });
+    syncRoom(roomId);
+    if (!room.users.size) rooms.delete(roomId);
   });
 });
 
 setInterval(() => {
-  for (const roomId of rooms.keys()) syncRoom(roomId);
-}, 3000);
+  const now = Date.now();
+  for (const [roomId, room] of rooms) {
+    for (const [id, user] of room.users) {
+      if (now - user.lastSeen > 45000) {
+        releaseSpeaker(roomId, id);
+        room.users.delete(id);
+        io.to(roomId).emit("peer-left", { id });
+      }
+    }
+    if (!room.users.size) rooms.delete(roomId);
+    else syncRoom(roomId);
+  }
+}, 5000);
 
-server.listen(process.env.PORT || 3000, () => console.log("Radio Teléfono activo y sincronizado"));
+server.listen(process.env.PORT || 3000, () => console.log("Radio Teléfono SYNC PRO 2 activo"));

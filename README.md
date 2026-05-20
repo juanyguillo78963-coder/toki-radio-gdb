@@ -1,20 +1,21 @@
-# Radio Teléfono Gases de Belén PRO V2
+# Radio Teléfono Gases de Belén SYNC PRO 2
 
-Corrección:
-- Layout ajustado para PC y móvil.
-- Ya no queda pequeño centrado con mucho espacio negro.
-- Ruta directa: `/s/gases-belen`.
-- Botón HABLAR tipo PTT: presionar para transmitir, soltar para escuchar.
-- Sin panel admin.
+Mejoras:
+- Turno de habla: solo una persona transmite a la vez.
+- Lista de conectados sincronizada en tiempo real.
+- Reconexión automática y limpieza de usuarios fantasma.
+- Estado visual de quién está hablando.
+- Mejor estabilidad para varios celulares.
 
 ## Local
 ```bash
 npm install
 npm start
 ```
+Abrir: http://localhost:3000/s/gases-belen
 
-Abrir:
-http://localhost:3000/s/gases-belen
+## Render
+Build Command: `npm install`
+Start Command: `npm start`
 
-## Servidor
-Debe subirse a un hosting Node.js con HTTPS para que el micrófono funcione bien.
+Ruta pública: `/s/gases-belen`
