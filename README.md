@@ -1,19 +1,15 @@
-# Radio Teléfono Gases de Belén SYNC PRO 3 RADIO FX
+# Radio Teléfono Gases de Belén — SYNC PRO 5 TÁCTICA
 
-Mejoras:
-- Efecto de voz tipo radio/walkie-talkie: band-pass, compresión y saturación suave.
-- Beep/krrshh al iniciar y terminar transmisión.
-- Visual más PRO con estado de canal, scanline y botón PTT estilo radio.
-- Turno de habla: solo una persona transmite a la vez.
-- Lista de conectados sincronizada en tiempo real.
-- Reconexión automática y limpieza de usuarios fantasma.
+Versión mejorada para móvil con interfaz táctica, audio reforzado y efecto walkie-talkie más audible.
 
-## Local
-```bash
-npm install
-npm start
-```
-Abrir: http://localhost:3000/s/gases-belen
+## Mejoras principales
+- Interfaz nueva tipo radio táctica / PTT.
+- Beep y krrrshh generados dentro del navegador, más fuertes.
+- Audio remoto procesado con WebAudio: compresor, filtro y ganancia extra.
+- Botón visible para activar sonido en celulares que bloquean autoplay.
+- Reconexión más agresiva y sincronización de usuarios cada pocos segundos.
+- Turno de habla: una sola persona transmite a la vez.
+- Indicador de canal, transmisión, conectados y estado de audio.
 
 ## Render
 Build Command: `npm install`

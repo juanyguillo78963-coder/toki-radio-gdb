@@ -5,9 +5,12 @@
   const usersBox = $("users"), messages = $("messages"), chatInput = $("chatInput"), sendBtn = $("sendBtn");
   const muteBtn = $("muteBtn"), shareBtn = $("shareBtn"), copyBtn = $("copyBtn");
   const radioFxStatus = $("radioFxStatus"), speakerTag = $("speakerTag"), unlockBtn = $("unlockBtn");
+  const volumeSlider = $("volumeSlider"), countLabel = $("countLabel"), turnLabel = $("turnLabel"), signalLabel = $("signalLabel"), audioLabel = $("audioLabel");
   let lockedByOther = false;
   let currentSpeakerName = null;
   let audioUnlocked = false;
+  let remoteGainValue = 2.2;
+  const remoteNodes = new Map();
   const pendingAudios = new Set();
 
   let socket = null;
@@ -69,6 +72,30 @@
   }
 
 
+
+
+  function routeRemoteAudio(peerId, stream){
+    try{
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const old = remoteNodes.get(peerId);
+      if(old){ try{ old.source.disconnect(); old.gain.disconnect(); old.comp.disconnect(); }catch{} }
+      const source = audioCtx.createMediaStreamSource(stream);
+      const high = audioCtx.createBiquadFilter(); high.type = "highpass"; high.frequency.value = 220;
+      const low = audioCtx.createBiquadFilter(); low.type = "lowpass"; low.frequency.value = 3600;
+      const comp = audioCtx.createDynamicsCompressor();
+      comp.threshold.value = -38; comp.knee.value = 8; comp.ratio.value = 12; comp.attack.value = 0.002; comp.release.value = 0.12;
+      const gain = audioCtx.createGain(); gain.gain.value = remoteGainValue;
+      source.connect(high).connect(low).connect(comp).connect(gain).connect(audioCtx.destination);
+      remoteNodes.set(peerId, { source, high, low, comp, gain });
+      if(audioLabel) audioLabel.textContent = "AMPLIFICADO";
+    }catch(e){ console.warn("remote route", e); }
+  }
+
+  function setRemoteGain(value){
+    remoteGainValue = Number(value) || 2.2;
+    for(const node of remoteNodes.values()){ try{ node.gain.gain.value = remoteGainValue; }catch{} }
+  }
+
   function makeDistortionCurve(amount = 18){
     const n = 44100;
     const curve = new Float32Array(n);
@@ -95,7 +122,7 @@
       osc.type = "square";
       osc.frequency.value = freq;
       gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.12, audioCtx.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.32, audioCtx.currentTime + 0.01);
       gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
       osc.connect(gain).connect(audioCtx.destination);
       osc.start(); osc.stop(audioCtx.currentTime + duration + 0.02);
@@ -112,7 +139,7 @@
       bp.type = "bandpass"; bp.frequency.value = 1250; bp.Q.value = 0.8;
       noise.buffer = makeNoiseBuffer(audioCtx, type === "start" ? 0.24 : 0.18);
       noiseGain.gain.setValueAtTime(0.0001, now);
-      noiseGain.gain.exponentialRampToValueAtTime(type === "start" ? 0.48 : 0.34, now + 0.015);
+      noiseGain.gain.exponentialRampToValueAtTime(type === "start" ? 0.78 : 0.58, now + 0.015);
       noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + (type === "start" ? 0.22 : 0.16));
       noise.connect(bp).connect(noiseGain).connect(fxDestination);
       noise.start(now);
@@ -121,7 +148,7 @@
       const og = audioCtx.createGain();
       osc.type = "square"; osc.frequency.value = type === "start" ? 900 : 520;
       og.gain.setValueAtTime(0.0001, now);
-      og.gain.exponentialRampToValueAtTime(0.24, now + 0.01);
+      og.gain.exponentialRampToValueAtTime(0.42, now + 0.01);
       og.gain.exponentialRampToValueAtTime(0.0001, now + 0.09);
       osc.connect(og).connect(fxDestination);
       osc.start(now + 0.02); osc.stop(now + 0.11);
@@ -140,7 +167,7 @@
       const shaper = audioCtx.createWaveShaper(); shaper.curve = makeDistortionCurve(15); shaper.oversample = "2x";
       const comp = audioCtx.createDynamicsCompressor();
       comp.threshold.value = -42; comp.knee.value = 10; comp.ratio.value = 14; comp.attack.value = 0.003; comp.release.value = 0.12;
-      const gain = audioCtx.createGain(); gain.gain.value = 2.65;
+      const gain = audioCtx.createGain(); gain.gain.value = 3.15;
       const limiter = audioCtx.createDynamicsCompressor();
       limiter.threshold.value = -8; limiter.knee.value = 0; limiter.ratio.value = 20; limiter.attack.value = 0.001; limiter.release.value = 0.05;
       fxDestination = audioCtx.createMediaStreamDestination();
@@ -175,6 +202,7 @@
   function closePeer(id){
     const item = peers.get(id);
     if(item?.pc) item.pc.close();
+    const rn = remoteNodes.get(id); if(rn){ try{ rn.source.disconnect(); rn.high.disconnect(); rn.low.disconnect(); rn.comp.disconnect(); rn.gain.disconnect(); }catch{} remoteNodes.delete(id); }
     peers.delete(id);
     const audio = $("audio-" + id); if(audio) audio.remove();
   }
@@ -184,7 +212,7 @@
   function joinSocketRoom(){
     if(!socket?.connected || !joined) return;
     socket.emit("join-room", { roomId, name: currentName });
-    setStatus("Conectado: sincronizando");
+    setStatus("Conectado: sincronizando"); if(signalLabel) signalLabel.textContent = "SYNC";
   }
 
   function getSocket(){
@@ -215,7 +243,7 @@
 
     socket.on("joined", data => {
       mySocketId = data.id || socket.id;
-      setStatus("Conectado: escuchando");
+      setStatus("Conectado: escuchando"); if(signalLabel) signalLabel.textContent = "ONLINE";
       if(Array.isArray(data.users)) renderUsers(data.users);
       if(data.speakerId && data.speakerId !== mySocketId){ lockedByOther = true; currentSpeakerName = data.speakerName || "Otro usuario"; setBusyUI(currentSpeakerName); }
     });
@@ -258,26 +286,29 @@
       currentSpeakerName = name || "Alguien";
       lockedByOther = id !== mySocketId;
       if(lockedByOther) setBusyUI(currentSpeakerName);
-      else if(speakerTag) speakerTag.textContent = "Canal libre";
+      else if(speakerTag) speakerTag.textContent = "Canal libre"; if(turnLabel) turnLabel.textContent = "Libre";
     });
     socket.on("talk-ended", ({ id }) => {
       if(id !== mySocketId){ lockedByOther = false; currentSpeakerName = null; setMainState("Estás escuchando", "Turno libre. Mantén presionado HABLAR para transmitir."); }
     });
     socket.on("room-state", data => {
       if(Array.isArray(data.users)) renderUsers(data.users);
+      if(countLabel) countLabel.textContent = data.count || (Array.isArray(data.users) ? data.users.length : 0);
+      if(turnLabel) turnLabel.textContent = data.speakerName || "Libre";
       lockedByOther = !!(data.speakerId && data.speakerId !== mySocketId);
       currentSpeakerName = data.speakerName || null;
       if(lockedByOther) setBusyUI(currentSpeakerName);
-      else if(speakerTag) speakerTag.textContent = "Canal libre";
+      else if(speakerTag) speakerTag.textContent = "Canal libre"; if(turnLabel) turnLabel.textContent = "Libre";
     });
     socket.on("chat", m => addMessage(m.name, m.text, m.time));
-    socket.on("disconnect", () => { setStatus("Reconectando..."); resetPeers(); });
+    socket.on("disconnect", () => { setStatus("Reconectando..."); if(signalLabel) signalLabel.textContent = "RECON"; resetPeers(); });
     socket.on("reconnect", () => joinSocketRoom());
   }
 
   function setBusyUI(name){
     setMainState(`${name || "Alguien"} está hablando`, "Audio entrando con efecto radio. Espera a que libere el turno.");
     if(speakerTag) speakerTag.textContent = `TRANSMITIENDO: ${name || "Alguien"}`;
+    if(turnLabel) turnLabel.textContent = name || "Ocupado";
     talkBtn.classList.add("busy");
     talkBtn.querySelector("b").textContent = "OCUPADO";
   }
@@ -296,7 +327,7 @@
     try{
       await unlockAudioOutput();
       await getSocket();
-      rawMicStream = await navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:true, noiseSuppression:true, autoGainControl:true }, video:false });
+      rawMicStream = await navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:true, noiseSuppression:true, autoGainControl:true, channelCount:1, sampleRate:48000 }, video:false });
       localStream = await buildRadioFxStream(rawMicStream);
       localStream.getAudioTracks().forEach(t => t.enabled = true);
       injectRadioBurst("end");
@@ -323,7 +354,10 @@
     pc.ontrack = e => {
       let audio = $("audio-" + peerId);
       if(!audio){ audio = document.createElement("audio"); audio.id = "audio-" + peerId; audio.autoplay = true; audio.playsInline = true; document.body.appendChild(audio); }
-      audio.srcObject = e.streams[0]; forceAudioPlay(audio);
+      audio.srcObject = e.streams[0];
+      routeRemoteAudio(peerId, e.streams[0]);
+      audio.volume = Math.min(1, remoteGainValue / 3);
+      forceAudioPlay(audio);
     };
     pc.onconnectionstatechange = () => {
       if(["failed", "disconnected", "closed"].includes(pc.connectionState)) setTimeout(() => {
@@ -363,7 +397,7 @@
         talkBtn.classList.remove("busy");
         talkBtn.classList.add("speaking");
         talkBtn.querySelector("b").textContent = "TRANSMITIENDO";
-        setMainState("Te están escuchando", "Suelta el botón para liberar el turno.");
+        setMainState("Te están escuchando", "Suelta el botón para liberar el turno. Beep y krrrshh activos."); if(turnLabel) turnLabel.textContent = "Tú";
         socket.emit("speaking", true);
         if(speakerTag) speakerTag.textContent = "TÚ ESTÁS TRANSMITIENDO";
       });
@@ -376,12 +410,13 @@
     talkBtn.classList.remove("speaking", "busy");
     talkBtn.querySelector("b").textContent = "HABLAR";
     setMainState("Estás escuchando", "Cuando alguien hable, lo escucharás automáticamente con efecto radio.");
-    if(speakerTag) speakerTag.textContent = "Canal libre";
+    if(speakerTag) speakerTag.textContent = "Canal libre"; if(turnLabel) turnLabel.textContent = "Libre";
     socket.emit("speaking", false);
     socket.emit("release-talk");
   }
 
   if(unlockBtn) unlockBtn.addEventListener("click", unlockAudioOutput);
+  if(volumeSlider) volumeSlider.addEventListener("input", e => setRemoteGain(e.target.value));
   document.addEventListener("visibilitychange", () => { if(!document.hidden && joined) { unlockAudioOutput(); joinSocketRoom(); } });
   joinBtn.addEventListener("click", start);
   ["mousedown","touchstart","pointerdown"].forEach(ev => talkBtn.addEventListener(ev, e => { e.preventDefault(); setSpeaking(true); }, {passive:false}));

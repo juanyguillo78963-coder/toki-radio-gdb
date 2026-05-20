@@ -12,14 +12,14 @@ app.use(express.static(path.join(__dirname, "public"), { maxAge: "30s" }));
 
 app.get("/", (_, res) => res.redirect("/s/gases-belen"));
 app.get("/s/:room", (_, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
-app.get("/health", (_, res) => res.json({ ok: true, version: "SYNC-PRO-4-FULL-AUDIO", name: "Radio Telefono GDB" }));
+app.get("/health", (_, res) => res.json({ ok: true, version: "SYNC-PRO-5-TACTICA", name: "Radio Telefono GDB" }));
 
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: "*" },
   transports: ["websocket", "polling"],
-  pingInterval: 8000,
-  pingTimeout: 24000,
+  pingInterval: 5000,
+  pingTimeout: 18000,
   maxHttpBufferSize: 1e7
 });
 
@@ -167,7 +167,7 @@ setInterval(() => {
   const now = Date.now();
   for (const [roomId, room] of rooms) {
     for (const [id, user] of room.users) {
-      if (now - user.lastSeen > 45000) {
+      if (now - user.lastSeen > 30000) {
         releaseSpeaker(roomId, id);
         room.users.delete(id);
         io.to(roomId).emit("peer-left", { id });
@@ -176,6 +176,6 @@ setInterval(() => {
     if (!room.users.size) rooms.delete(roomId);
     else syncRoom(roomId);
   }
-}, 5000);
+}, 3000);
 
-server.listen(process.env.PORT || 3000, () => console.log("Radio Teléfono SYNC PRO 4 FULL AUDIO activo"));
+server.listen(process.env.PORT || 3000, () => console.log("Radio Teléfono SYNC PRO 5 TACTICA activo"));

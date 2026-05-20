@@ -4,51 +4,64 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#050914" />
-  <title>Radio Teléfono | Gases de Belén</title>
+  <title>Radio Táctica | Gases de Belén</title>
   <link rel="stylesheet" href="/style.css" />
   <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
   <div class="scanline"></div>
-  <main class="shell">
-    <section class="radio">
+  <div class="noise"></div>
+  <main class="shell tactical-shell">
+    <section class="radio tactical-radio">
       <header class="topbar">
         <div class="brand">
           <div class="logo">▰</div>
-          <div><strong>GASES DE BELÉN</strong><span>Siempre contigo</span></div>
+          <div><strong>GASES DE BELÉN</strong><span>Radio táctica PTT · Siempre contigo</span></div>
         </div>
-        <div class="badge"><i></i> EN VIVO</div>
+        <div class="badge"><i></i> CANAL ACTIVO</div>
       </header>
 
-      <section id="joinPanel" class="center-card">
-        <div class="orb small-orb">🎧</div>
-        <h1>Radio Teléfono</h1>
-        <p>Abre el link, escucha en vivo y habla manteniendo presionado el botón.</p>
-        <input id="nameInput" maxlength="32" placeholder="Escribe tu nombre" autocomplete="name" />
+      <section id="joinPanel" class="center-card tactical-card">
+        <div class="orb small-orb">📡</div>
+        <h1>Radio Táctica</h1>
+        <p>Audio en vivo estilo walkie‑talkie. Entra, activa sonido y mantén presionado para hablar.</p>
+        <input id="nameInput" maxlength="32" placeholder="Nombre del operador" autocomplete="name" />
         <button id="joinBtn" class="primary">Entrar a escuchar</button>
         <button id="unlockBtn" class="ghost unlock hidden" type="button">🔊 Activar sonido del celular</button>
-        <small>Permite el micrófono para poder hablar.</small>
+        <small>Importante: permite micrófono y sonido para escuchar fuerte.</small>
       </section>
 
-      <section id="radioPanel" class="onair hidden">
+      <section id="radioPanel" class="onair hidden tactical-onair">
         <div class="session-row">
           <span id="connStatus">Conectando...</span>
           <button id="shareBtn" class="ghost">Compartir link</button>
         </div>
 
-        <div class="radio-status-bar"><span id="radioFxStatus">EFECTO RADIO: ACTIVO</span><span id="speakerTag">Canal libre</span></div>
-        <div class="visualizer">
-          <div class="wave"></div>
+        <div class="lcd">
+          <div><small>CANAL</small><b>GDB‑01</b></div>
+          <div><small>SEÑAL</small><b id="signalLabel">ONLINE</b></div>
+          <div><small>AUDIO</small><b id="audioLabel">RADIO FX</b></div>
+        </div>
+
+        <div class="radio-status-bar"><span id="radioFxStatus">EFECTO RADIO: TÁCTICO</span><span id="speakerTag">Canal libre</span></div>
+        <div class="visualizer tactical-visualizer">
+          <div class="wave-stack"><i></i><i></i><i></i><i></i><i></i></div>
           <button id="talkBtn" class="talk" aria-label="Mantén presionado para hablar">
             <span class="micIcon">📻</span>
             <b>HABLAR</b>
             <small>Mantén presionado</small>
           </button>
-          <div class="wave purple"></div>
+          <div class="vu"><span></span><span></span><span></span><span></span><span></span><span></span></div>
         </div>
 
         <h2 id="modeTitle">Estás escuchando</h2>
-        <p id="modeText">Cuando alguien hable, lo escucharás automáticamente.</p>
+        <p id="modeText">Cuando alguien hable, lo escucharás automáticamente con efecto radio.</p>
+
+        <div class="volume-card">
+          <label for="volumeSlider">Volumen de entrada</label>
+          <input id="volumeSlider" type="range" min="0.6" max="3" value="2.2" step="0.1" />
+          <small>Sube esto si un celular suena muy pasito.</small>
+        </div>
 
         <div class="actions">
           <button id="muteBtn" class="ghost">Silenciar salida</button>
@@ -58,8 +71,15 @@
     </section>
 
     <aside class="sidebar">
+      <section class="panel status-panel">
+        <h3>Estado del canal</h3>
+        <div class="status-grid">
+          <div><span id="countLabel">0</span><small>conectados</small></div>
+          <div><span id="turnLabel">Libre</span><small>turno</small></div>
+        </div>
+      </section>
       <section class="panel">
-        <h3>Conectados</h3>
+        <h3>Operadores conectados</h3>
         <div id="users" class="users"><div class="empty">Aún no hay oyentes.</div></div>
       </section>
 
@@ -74,10 +94,10 @@
     </aside>
   </main>
 
-  <section class="steps pro3">
-    <article><b>01</b><h4>Entran con link</h4><p>Sin admin visible, sin registros complicados.</p></article>
-    <article><b>02</b><h4>Escuchan en vivo</h4><p>El audio llega automáticamente a todos.</p></article>
-    <article><b>03</b><h4>Sonido radio</h4><p>Beep, krrshh y voz comprimida estilo walkie-talkie.</p></article>
+  <section class="steps pro5">
+    <article><b>01</b><h4>Audio desbloqueado</h4><p>Botón especial para celulares que bloquean sonido automático.</p></article>
+    <article><b>02</b><h4>Radio FX fuerte</h4><p>Beep, krrrshh, compresión y ganancia para voz tipo radio.</p></article>
+    <article><b>03</b><h4>Canal estable</h4><p>Reconexión, turno único y limpieza rápida de usuarios fantasma.</p></article>
   </section>
 
   <script src="/app.js"></script>
