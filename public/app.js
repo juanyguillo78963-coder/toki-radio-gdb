@@ -24,6 +24,12 @@
   let mySocketId = null;
   let currentName = "Oyente";
   const roomId = location.pathname.startsWith("/s/") ? decodeURIComponent(location.pathname.split("/s/")[1] || "gases-belen") : "gases-belen";
+  const CLIENT_UID_KEY = "gdb_radio_client_uid_v6";
+  let clientUid = localStorage.getItem(CLIENT_UID_KEY);
+  if(!clientUid){ clientUid = (crypto?.randomUUID?.() || (Date.now()+"-"+Math.random()).replace(/\D/g,"")); localStorage.setItem(CLIENT_UID_KEY, clientUid); }
+  let lastHardResync = 0;
+  let heartbeatTimer = null;
+  let peerRepairTimer = null;
   const peers = new Map();
   const rtcConfig = { iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
@@ -209,9 +215,59 @@
   function resetPeers(){
     for(const id of Array.from(peers.keys())) closePeer(id);
   }
+  async function resumeAudioEngine(){
+    try{
+      if(audioCtx?.state === "suspended") await audioCtx.resume();
+      for(const a of document.querySelectorAll("audio")) forceAudioPlay(a);
+      if(audioLabel) audioLabel.textContent = "AUDIO OK";
+    }catch(e){ showUnlockAudio(); }
+  }
+
+  function startWatchdogs(){
+    clearInterval(heartbeatTimer); clearInterval(peerRepairTimer);
+    heartbeatTimer = setInterval(() => {
+      if(!joined) return;
+      if(socket?.connected){
+        socket.emit("request-sync");
+        socket.emit("client-visible", !document.hidden);
+      }
+      if(audioCtx?.state === "suspended" && !document.hidden) resumeAudioEngine();
+    }, 1800);
+    peerRepairTimer = setInterval(() => {
+      if(!joined || !socket?.connected || document.hidden) return;
+      for(const [id,item] of peers){
+        const st = item.pc?.connectionState;
+        const ice = item.pc?.iceConnectionState;
+        if(["failed","disconnected","closed"].includes(st) || ["failed","disconnected","closed"].includes(ice)){
+          closePeer(id);
+        }
+      }
+      socket.emit("force-room-resync");
+    }, 6500);
+  }
+
+  async function hardResync(reason = "resync"){
+    if(!joined) return;
+    const now = Date.now();
+    if(now - lastHardResync < 1800) return;
+    lastHardResync = now;
+    setStatus("Reparando audio..."); if(signalLabel) signalLabel.textContent = "REPAIR";
+    await resumeAudioEngine();
+    resetPeers();
+    if(socket?.connected){
+      joinSocketRoom();
+      socket.emit("force-room-resync");
+      socket.emit("request-sync");
+    } else {
+      try{ await getSocket(); joinSocketRoom(); }catch{}
+    }
+    addMessage("Sistema", "Ultra Sync reparó la conexión del celular.");
+  }
+
   function joinSocketRoom(){
     if(!socket?.connected || !joined) return;
-    socket.emit("join-room", { roomId, name: currentName });
+    socket.emit("join-room", { roomId, name: currentName, clientUid });
+    socket.emit("client-visible", !document.hidden);
     setStatus("Conectado: sincronizando"); if(signalLabel) signalLabel.textContent = "SYNC";
   }
 
@@ -280,6 +336,7 @@
     });
 
     socket.on("peer-left", ({ id }) => closePeer(id));
+    socket.on("force-rejoin", () => setTimeout(() => hardResync("force-rejoin"), 400));
     
     socket.on("peer-speaking", ({ speaking, name }) => { if(speaking) setBusyUI(name || "Alguien"); });
     socket.on("talk-started", ({ id, name }) => {
@@ -337,7 +394,8 @@
       joinPanel.classList.add("hidden"); radioPanel.classList.remove("hidden");
       joinSocketRoom();
       addMessage("Sistema", "Conectado correctamente. Mantén presionado HABLAR para transmitir.");
-      setInterval(() => { if(socket?.connected && joined) socket.emit("request-sync"); }, 2500);
+      startWatchdogs();
+      setTimeout(() => hardResync("initial"), 1200);
     }catch(e){
       console.error(e);
       fail(e.message.includes("Socket.IO") ? "Esta versión debe estar montada como Web Service Node/Socket.IO." : "Activa el micrófono y entra desde HTTPS. Luego vuelve a intentar.");
@@ -360,10 +418,17 @@
       forceAudioPlay(audio);
     };
     pc.onconnectionstatechange = () => {
+      if(["connected"].includes(pc.connectionState)){ if(signalLabel) signalLabel.textContent = "ONLINE"; }
       if(["failed", "disconnected", "closed"].includes(pc.connectionState)) setTimeout(() => {
         const current = peers.get(peerId);
-        if(current?.pc === pc && pc.connectionState !== "connected") closePeer(peerId);
-      }, 5000);
+        if(current?.pc === pc && pc.connectionState !== "connected") { closePeer(peerId); socket?.emit("force-room-resync"); }
+      }, 2200);
+    };
+    pc.oniceconnectionstatechange = () => {
+      if(["failed", "disconnected", "closed"].includes(pc.iceConnectionState)) setTimeout(() => {
+        const current = peers.get(peerId);
+        if(current?.pc === pc && pc.iceConnectionState !== "connected") { closePeer(peerId); socket?.emit("force-room-resync"); }
+      }, 2200);
     };
     if(initiator){
       try{
@@ -417,7 +482,22 @@
 
   if(unlockBtn) unlockBtn.addEventListener("click", unlockAudioOutput);
   if(volumeSlider) volumeSlider.addEventListener("input", e => setRemoteGain(e.target.value));
-  document.addEventListener("visibilitychange", () => { if(!document.hidden && joined) { unlockAudioOutput(); joinSocketRoom(); } });
+  document.addEventListener("visibilitychange", () => {
+    if(!joined) return;
+    if(document.hidden){
+      socket?.emit("client-visible", false);
+      if(localStream) localStream.getAudioTracks().forEach(t => t.enabled = false);
+      socket?.emit("release-talk");
+    } else {
+      socket?.emit("client-visible", true);
+      setTimeout(() => hardResync("visible"), 250);
+      setTimeout(() => hardResync("visible-2"), 2200);
+    }
+  });
+  window.addEventListener("focus", () => { if(joined) setTimeout(() => hardResync("focus"), 250); });
+  window.addEventListener("pageshow", () => { if(joined) setTimeout(() => hardResync("pageshow"), 250); });
+  window.addEventListener("online", () => { if(joined) setTimeout(() => hardResync("online"), 250); });
+  window.addEventListener("pagehide", () => { if(joined){ socket?.emit("client-visible", false); socket?.emit("release-talk"); } });
   joinBtn.addEventListener("click", start);
   ["mousedown","touchstart","pointerdown"].forEach(ev => talkBtn.addEventListener(ev, e => { e.preventDefault(); setSpeaking(true); }, {passive:false}));
   ["mouseup","mouseleave","touchend","touchcancel","pointerup","pointercancel"].forEach(ev => talkBtn.addEventListener(ev, e => { e.preventDefault(); setSpeaking(false); }, {passive:false}));

@@ -12,7 +12,7 @@ app.use(express.static(path.join(__dirname, "public"), { maxAge: "30s" }));
 
 app.get("/", (_, res) => res.redirect("/s/gases-belen"));
 app.get("/s/:room", (_, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
-app.get("/health", (_, res) => res.json({ ok: true, version: "SYNC-PRO-5-TACTICA", name: "Radio Telefono GDB" }));
+app.get("/health", (_, res) => res.json({ ok: true, version: "SYNC-PRO-6-ULTRA-SYNC", name: "Radio Telefono GDB" }));
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -59,9 +59,10 @@ function releaseSpeaker(roomId, socketId) {
 }
 
 io.on("connection", socket => {
-  socket.on("join-room", ({ roomId, name }) => {
+  socket.on("join-room", ({ roomId, name, clientUid }) => {
     const roomName = String(roomId || "gases-belen").replace(/[^a-zA-Z0-9-_]/g, "").slice(0, 64) || "gases-belen";
     const userName = cleanName(name);
+    const stableUid = String(clientUid || "").replace(/[^a-zA-Z0-9-_]/g, "").slice(0, 80) || socket.id;
 
     if (socket.data.roomId && socket.data.roomId !== roomName) {
       releaseSpeaker(socket.data.roomId, socket.id);
@@ -74,11 +75,24 @@ io.on("connection", socket => {
     socket.data.lastSeen = Date.now();
 
     const room = getRoom(roomName);
+
+    // Si el mismo celular vuelve de otra app o reconecta, cerramos su socket anterior para evitar usuarios fantasma.
+    for (const [oldId, oldUser] of room.users) {
+      if (oldId !== socket.id && oldUser.clientUid === stableUid) {
+        releaseSpeaker(roomName, oldId);
+        room.users.delete(oldId);
+        io.to(oldId).emit("force-rejoin");
+        socket.to(roomName).emit("peer-left", { id: oldId });
+      }
+    }
+
     room.users.set(socket.id, {
       id: socket.id,
+      clientUid: stableUid,
       name: userName,
       joinedAt: room.users.get(socket.id)?.joinedAt || Date.now(),
-      lastSeen: Date.now()
+      lastSeen: Date.now(),
+      visible: true
     });
 
     const existing = Array.from(room.users.values())
@@ -97,6 +111,25 @@ io.on("connection", socket => {
     const user = getRoom(room).users.get(socket.id);
     if (user) user.lastSeen = Date.now();
     syncRoom(room);
+  });
+
+
+  socket.on("client-visible", value => {
+    const roomId = socket.data.roomId;
+    if (!roomId) return;
+    const user = getRoom(roomId).users.get(socket.id);
+    if (user) {
+      user.visible = !!value;
+      user.lastSeen = Date.now();
+      syncRoom(roomId);
+    }
+  });
+
+  socket.on("force-room-resync", () => {
+    const roomId = socket.data.roomId;
+    if (!roomId) return;
+    socket.emit("existing-peers", Array.from(getRoom(roomId).users.values()).filter(u => u.id !== socket.id).map(u => ({ id: u.id, name: u.name })));
+    syncRoom(roomId);
   });
 
   socket.on("signal", ({ to, data }) => {
@@ -178,4 +211,4 @@ setInterval(() => {
   }
 }, 3000);
 
-server.listen(process.env.PORT || 3000, () => console.log("Radio Teléfono SYNC PRO 5 TACTICA activo"));
+server.listen(process.env.PORT || 3000, () => console.log("Radio Teléfono SYNC PRO 6 ULTRA SYNC activo"));

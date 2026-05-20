@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#050914" />
-  <title>Radio Táctica | Gases de Belén</title>
+  <title>Radio Ultra Sync | Gases de Belén</title>
   <link rel="stylesheet" href="/style.css" />
   <script src="/socket.io/socket.io.js"></script>
 </head>
@@ -23,8 +23,8 @@
 
       <section id="joinPanel" class="center-card tactical-card">
         <div class="orb small-orb">📡</div>
-        <h1>Radio Táctica</h1>
-        <p>Audio en vivo estilo walkie‑talkie. Entra, activa sonido y mantén presionado para hablar.</p>
+        <h1>Radio Ultra Sync</h1>
+        <p>PTT móvil con re‑enganche automático: si sales a WhatsApp, bloqueas pantalla o vuelves, la app se resincroniza sola.</p>
         <input id="nameInput" maxlength="32" placeholder="Nombre del operador" autocomplete="name" />
         <button id="joinBtn" class="primary">Entrar a escuchar</button>
         <button id="unlockBtn" class="ghost unlock hidden" type="button">🔊 Activar sonido del celular</button>
@@ -37,6 +37,7 @@
           <button id="shareBtn" class="ghost">Compartir link</button>
         </div>
 
+        <div class="sync-banner"><b>ULTRA SYNC</b><span>Reconecta audio · repara pares WebRTC · limpia usuarios fantasma</span></div>
         <div class="lcd">
           <div><small>CANAL</small><b>GDB‑01</b></div>
           <div><small>SEÑAL</small><b id="signalLabel">ONLINE</b></div>
@@ -94,10 +95,10 @@
     </aside>
   </main>
 
-  <section class="steps pro5">
+  <section class="steps pro5 pro6">
     <article><b>01</b><h4>Audio desbloqueado</h4><p>Botón especial para celulares que bloquean sonido automático.</p></article>
     <article><b>02</b><h4>Radio FX fuerte</h4><p>Beep, krrrshh, compresión y ganancia para voz tipo radio.</p></article>
-    <article><b>03</b><h4>Canal estable</h4><p>Reconexión, turno único y limpieza rápida de usuarios fantasma.</p></article>
+    <article><b>03</b><h4>Reenganche móvil</h4><p>Al volver desde otra app, reconstruye audio y conexión automáticamente.</p></article>
   </section>
 
   <script src="/app.js"></script>

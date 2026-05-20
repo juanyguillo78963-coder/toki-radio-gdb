@@ -1,18 +1,22 @@
-# Radio Teléfono Gases de Belén — SYNC PRO 5 TÁCTICA
+# Radio Teléfono Gases de Belén — SYNC PRO 6 ULTRA
 
-Versión mejorada para móvil con interfaz táctica, audio reforzado y efecto walkie-talkie más audible.
-
-## Mejoras principales
-- Interfaz nueva tipo radio táctica / PTT.
-- Beep y krrrshh generados dentro del navegador, más fuertes.
-- Audio remoto procesado con WebAudio: compresor, filtro y ganancia extra.
-- Botón visible para activar sonido en celulares que bloquean autoplay.
-- Reconexión más agresiva y sincronización de usuarios cada pocos segundos.
-- Turno de habla: una sola persona transmite a la vez.
-- Indicador de canal, transmisión, conectados y estado de audio.
+Versión con interfaz visual mejorada y lógica Ultra Sync para celulares:
+- Reenganche al volver desde otra app.
+- Reparación de audio suspendido por navegador móvil.
+- Reconstrucción de pares WebRTC cuando un celular se desconecta o queda pegado.
+- Limpieza de sockets duplicados del mismo celular.
+- Watchdog de sincronización cada pocos segundos.
+- UI táctica premium y estados de reparación.
 
 ## Render
-Build Command: `npm install`
-Start Command: `npm start`
+Build Command:
+```bash
+npm install
+```
+Start Command:
+```bash
+npm start
+```
 
-Ruta pública: `/s/gases-belen`
+Ruta principal:
+`/s/gases-belen`
