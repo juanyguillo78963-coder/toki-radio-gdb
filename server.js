@@ -12,7 +12,7 @@ app.use(express.static(path.join(__dirname, "public"), { maxAge: "30s" }));
 
 app.get("/", (_, res) => res.redirect("/s/gases-belen"));
 app.get("/s/:room", (_, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
-app.get("/health", (_, res) => res.json({ ok: true, version: "SYNC-PRO-3-RADIO-FX", name: "Radio Telefono GDB" }));
+app.get("/health", (_, res) => res.json({ ok: true, version: "SYNC-PRO-4-FULL-AUDIO", name: "Radio Telefono GDB" }));
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -178,4 +178,4 @@ setInterval(() => {
   }
 }, 5000);
 
-server.listen(process.env.PORT || 3000, () => console.log("Radio Teléfono SYNC PRO 3 RADIO FX activo"));
+server.listen(process.env.PORT || 3000, () => console.log("Radio Teléfono SYNC PRO 4 FULL AUDIO activo"));

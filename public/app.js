@@ -4,9 +4,11 @@
   const talkBtn = $("talkBtn"), connStatus = $("connStatus"), modeTitle = $("modeTitle"), modeText = $("modeText");
   const usersBox = $("users"), messages = $("messages"), chatInput = $("chatInput"), sendBtn = $("sendBtn");
   const muteBtn = $("muteBtn"), shareBtn = $("shareBtn"), copyBtn = $("copyBtn");
-  const radioFxStatus = $("radioFxStatus"), speakerTag = $("speakerTag");
+  const radioFxStatus = $("radioFxStatus"), speakerTag = $("speakerTag"), unlockBtn = $("unlockBtn");
   let lockedByOther = false;
   let currentSpeakerName = null;
+  let audioUnlocked = false;
+  const pendingAudios = new Set();
 
   let socket = null;
   let localStream = null;
@@ -22,8 +24,49 @@
   const peers = new Map();
   const rtcConfig = { iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" },
     { urls: "stun:global.stun.twilio.com:3478" }
-  ]};
+  ], iceCandidatePoolSize: 6};
+
+
+  async function unlockAudioOutput(){
+    try{
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if(audioCtx.state === "suspended") await audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      gain.gain.value = 0.00001;
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(); osc.stop(audioCtx.currentTime + 0.03);
+      audioUnlocked = true;
+      if(unlockBtn) unlockBtn.classList.add("hidden");
+      for(const a of Array.from(pendingAudios)){
+        try{ a.muted = mutedOutput; a.volume = 1; await a.play(); pendingAudios.delete(a); }catch{}
+      }
+      return true;
+    }catch(e){
+      audioUnlocked = false;
+      if(unlockBtn) unlockBtn.classList.remove("hidden");
+      return false;
+    }
+  }
+
+  function showUnlockAudio(){
+    if(unlockBtn) unlockBtn.classList.remove("hidden");
+    setMainState("Toca activar sonido", "Algunos celulares bloquean el audio automático. Toca ACTIVAR SONIDO una vez y luego escucharás todos.");
+  }
+
+  function forceAudioPlay(audio){
+    audio.autoplay = true;
+    audio.playsInline = true;
+    audio.controls = false;
+    audio.muted = mutedOutput;
+    audio.volume = 1;
+    const p = audio.play();
+    if(p && typeof p.catch === "function"){
+      p.catch(() => { pendingAudios.add(audio); showUnlockAudio(); });
+    }
+  }
 
 
   function makeDistortionCurve(amount = 18){
@@ -69,7 +112,7 @@
       bp.type = "bandpass"; bp.frequency.value = 1250; bp.Q.value = 0.8;
       noise.buffer = makeNoiseBuffer(audioCtx, type === "start" ? 0.24 : 0.18);
       noiseGain.gain.setValueAtTime(0.0001, now);
-      noiseGain.gain.exponentialRampToValueAtTime(type === "start" ? 0.22 : 0.16, now + 0.015);
+      noiseGain.gain.exponentialRampToValueAtTime(type === "start" ? 0.48 : 0.34, now + 0.015);
       noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + (type === "start" ? 0.22 : 0.16));
       noise.connect(bp).connect(noiseGain).connect(fxDestination);
       noise.start(now);
@@ -78,7 +121,7 @@
       const og = audioCtx.createGain();
       osc.type = "square"; osc.frequency.value = type === "start" ? 900 : 520;
       og.gain.setValueAtTime(0.0001, now);
-      og.gain.exponentialRampToValueAtTime(0.10, now + 0.01);
+      og.gain.exponentialRampToValueAtTime(0.24, now + 0.01);
       og.gain.exponentialRampToValueAtTime(0.0001, now + 0.09);
       osc.connect(og).connect(fxDestination);
       osc.start(now + 0.02); osc.stop(now + 0.11);
@@ -93,13 +136,15 @@
       const source = audioCtx.createMediaStreamSource(rawStream);
       const high = audioCtx.createBiquadFilter(); high.type = "highpass"; high.frequency.value = 360;
       const low = audioCtx.createBiquadFilter(); low.type = "lowpass"; low.frequency.value = 3100;
-      const presence = audioCtx.createBiquadFilter(); presence.type = "peaking"; presence.frequency.value = 1350; presence.Q.value = 1.4; presence.gain.value = 7;
+      const presence = audioCtx.createBiquadFilter(); presence.type = "peaking"; presence.frequency.value = 1350; presence.Q.value = 1.4; presence.gain.value = 10;
       const shaper = audioCtx.createWaveShaper(); shaper.curve = makeDistortionCurve(15); shaper.oversample = "2x";
       const comp = audioCtx.createDynamicsCompressor();
-      comp.threshold.value = -34; comp.knee.value = 8; comp.ratio.value = 9; comp.attack.value = 0.004; comp.release.value = 0.16;
-      const gain = audioCtx.createGain(); gain.gain.value = 1.35;
+      comp.threshold.value = -42; comp.knee.value = 10; comp.ratio.value = 14; comp.attack.value = 0.003; comp.release.value = 0.12;
+      const gain = audioCtx.createGain(); gain.gain.value = 2.65;
+      const limiter = audioCtx.createDynamicsCompressor();
+      limiter.threshold.value = -8; limiter.knee.value = 0; limiter.ratio.value = 20; limiter.attack.value = 0.001; limiter.release.value = 0.05;
       fxDestination = audioCtx.createMediaStreamDestination();
-      source.connect(high).connect(low).connect(presence).connect(shaper).connect(comp).connect(gain).connect(fxDestination);
+      source.connect(high).connect(low).connect(presence).connect(shaper).connect(comp).connect(gain).connect(limiter).connect(fxDestination);
       radioFxReady = true;
       if(radioFxStatus) radioFxStatus.textContent = "EFECTO RADIO: WALKIE-TALKIE ACTIVO";
       return fxDestination.stream;
@@ -249,11 +294,13 @@
     if(joined) return;
     joinBtn.disabled = true; joinBtn.textContent = "Conectando...";
     try{
+      await unlockAudioOutput();
       await getSocket();
       rawMicStream = await navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:true, noiseSuppression:true, autoGainControl:true }, video:false });
       localStream = await buildRadioFxStream(rawMicStream);
+      localStream.getAudioTracks().forEach(t => t.enabled = true);
       injectRadioBurst("end");
-    setTimeout(() => localStream.getAudioTracks().forEach(t => t.enabled = false), 140);
+      setTimeout(() => localStream.getAudioTracks().forEach(t => t.enabled = false), 220);
       currentName = nameInput.value.trim() || "Oyente";
       joined = true;
       joinPanel.classList.add("hidden"); radioPanel.classList.remove("hidden");
@@ -276,7 +323,7 @@
     pc.ontrack = e => {
       let audio = $("audio-" + peerId);
       if(!audio){ audio = document.createElement("audio"); audio.id = "audio-" + peerId; audio.autoplay = true; audio.playsInline = true; document.body.appendChild(audio); }
-      audio.srcObject = e.streams[0]; audio.muted = mutedOutput; audio.play().catch(()=>{});
+      audio.srcObject = e.streams[0]; forceAudioPlay(audio);
     };
     pc.onconnectionstatechange = () => {
       if(["failed", "disconnected", "closed"].includes(pc.connectionState)) setTimeout(() => {
@@ -311,8 +358,8 @@
           return;
         }
         if(audioCtx?.state === "suspended") audioCtx.resume().catch(()=>{});
-        injectRadioBurst("start");
         localStream.getAudioTracks().forEach(t => t.enabled = true);
+        injectRadioBurst("start");
         talkBtn.classList.remove("busy");
         talkBtn.classList.add("speaking");
         talkBtn.querySelector("b").textContent = "TRANSMITIENDO";
@@ -323,8 +370,9 @@
       return;
     }
 
-    injectRadioBurst("end");
-    setTimeout(() => localStream.getAudioTracks().forEach(t => t.enabled = false), 140);
+    localStream.getAudioTracks().forEach(t => t.enabled = true);
+      injectRadioBurst("end");
+      setTimeout(() => localStream.getAudioTracks().forEach(t => t.enabled = false), 220);
     talkBtn.classList.remove("speaking", "busy");
     talkBtn.querySelector("b").textContent = "HABLAR";
     setMainState("Estás escuchando", "Cuando alguien hable, lo escucharás automáticamente con efecto radio.");
@@ -333,6 +381,8 @@
     socket.emit("release-talk");
   }
 
+  if(unlockBtn) unlockBtn.addEventListener("click", unlockAudioOutput);
+  document.addEventListener("visibilitychange", () => { if(!document.hidden && joined) { unlockAudioOutput(); joinSocketRoom(); } });
   joinBtn.addEventListener("click", start);
   ["mousedown","touchstart","pointerdown"].forEach(ev => talkBtn.addEventListener(ev, e => { e.preventDefault(); setSpeaking(true); }, {passive:false}));
   ["mouseup","mouseleave","touchend","touchcancel","pointerup","pointercancel"].forEach(ev => talkBtn.addEventListener(ev, e => { e.preventDefault(); setSpeaking(false); }, {passive:false}));
@@ -340,7 +390,7 @@
   window.addEventListener("keyup", e => { if(e.code === "Space" && !["INPUT","TEXTAREA"].includes(document.activeElement.tagName)) setSpeaking(false); });
   function sendChat(){ const text = chatInput.value.trim(); if(!text || !socket?.connected) return; socket.emit("chat", text); chatInput.value = ""; }
   sendBtn.onclick = sendChat; chatInput.addEventListener("keydown", e => { if(e.key === "Enter") sendChat(); });
-  muteBtn.onclick = () => { mutedOutput = !mutedOutput; document.querySelectorAll("audio").forEach(a => a.muted = mutedOutput); muteBtn.textContent = mutedOutput ? "Activar salida" : "Silenciar salida"; };
+  muteBtn.onclick = () => { mutedOutput = !mutedOutput; document.querySelectorAll("audio").forEach(a => { a.muted = mutedOutput; a.volume = 1; if(!mutedOutput) forceAudioPlay(a); }); muteBtn.textContent = mutedOutput ? "Activar salida" : "Silenciar salida"; };
   async function copyLink(){ const url = location.origin + "/s/" + roomId; await navigator.clipboard.writeText(url); addMessage("Sistema", "Enlace copiado."); }
   copyBtn.onclick = copyLink;
   shareBtn.onclick = async () => { const url = location.origin + "/s/" + roomId; if(navigator.share) await navigator.share({ title:"Radio Teléfono Gases de Belén", url }); else await copyLink(); };
