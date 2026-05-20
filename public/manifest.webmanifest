@@ -1,0 +1,10 @@
+{
+  "name": "Radio Gases de Belén",
+  "short_name": "Radio GDB",
+  "start_url": "/s/gases-belen",
+  "display": "standalone",
+  "background_color": "#020611",
+  "theme_color": "#050914",
+  "orientation": "portrait",
+  "icons": []
+}

@@ -105,6 +105,8 @@ io.on("connection", socket => {
     syncRoom(roomName);
   });
 
+  socket.on("latency-check", ack => { if (typeof ack === "function") ack({ ok: true, serverTime: Date.now() }); });
+
   socket.on("request-sync", () => {
     const room = socket.data.roomId;
     if (!room) return;

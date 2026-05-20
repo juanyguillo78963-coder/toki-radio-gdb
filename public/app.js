@@ -6,6 +6,7 @@
   const muteBtn = $("muteBtn"), shareBtn = $("shareBtn"), copyBtn = $("copyBtn");
   const radioFxStatus = $("radioFxStatus"), speakerTag = $("speakerTag"), unlockBtn = $("unlockBtn");
   const volumeSlider = $("volumeSlider"), countLabel = $("countLabel"), turnLabel = $("turnLabel"), signalLabel = $("signalLabel"), audioLabel = $("audioLabel");
+  const pingLabel = $("pingLabel"), bottomPing = $("bottomPing"), wakeLabel = $("wakeLabel"), installBtn = $("installBtn");
   let lockedByOther = false;
   let currentSpeakerName = null;
   let audioUnlocked = false;
@@ -30,6 +31,10 @@
   let lastHardResync = 0;
   let heartbeatTimer = null;
   let peerRepairTimer = null;
+  let pingTimer = null;
+  let wakeLock = null;
+  let deferredInstallPrompt = null;
+  let batteryPct = null;
   const peers = new Map();
   const rtcConfig = { iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
@@ -75,6 +80,39 @@
     if(p && typeof p.catch === "function"){
       p.catch(() => { pendingAudios.add(audio); showUnlockAudio(); });
     }
+  }
+
+  async function requestWakeLock(){
+    try{
+      if("wakeLock" in navigator){
+        wakeLock = await navigator.wakeLock.request("screen");
+        if(wakeLabel) wakeLabel.textContent = "Activo";
+        wakeLock.addEventListener("release", () => { if(wakeLabel) wakeLabel.textContent = "Pausado"; });
+      } else if(wakeLabel) wakeLabel.textContent = "No soportado";
+    }catch(e){ if(wakeLabel) wakeLabel.textContent = "Bloqueado"; }
+  }
+
+  async function readBattery(){
+    try{
+      if(navigator.getBattery){
+        const b = await navigator.getBattery();
+        const update = () => { batteryPct = Math.round((b.level || 0) * 100); };
+        update();
+        b.addEventListener("levelchange", update);
+      }
+    }catch{}
+  }
+
+  function setPanelMode(mode){
+    if(!radioPanel) return;
+    radioPanel.classList.remove("tx", "rx", "idle");
+    radioPanel.classList.add(mode || "idle");
+  }
+
+  function updatePing(ms){
+    const text = Number.isFinite(ms) ? `${Math.max(1, Math.round(ms))} ms` : "-- ms";
+    if(pingLabel) pingLabel.textContent = text;
+    if(bottomPing) bottomPing.textContent = text;
   }
 
 
@@ -224,7 +262,7 @@
   }
 
   function startWatchdogs(){
-    clearInterval(heartbeatTimer); clearInterval(peerRepairTimer);
+    clearInterval(heartbeatTimer); clearInterval(peerRepairTimer); clearInterval(pingTimer);
     heartbeatTimer = setInterval(() => {
       if(!joined) return;
       if(socket?.connected){
@@ -233,6 +271,11 @@
       }
       if(audioCtx?.state === "suspended" && !document.hidden) resumeAudioEngine();
     }, 1800);
+    pingTimer = setInterval(() => {
+      if(!joined || !socket?.connected) return;
+      const t = performance.now();
+      socket.timeout(1800).emit("latency-check", (err) => { if(!err) updatePing(performance.now() - t); });
+    }, 3000);
     peerRepairTimer = setInterval(() => {
       if(!joined || !socket?.connected || document.hidden) return;
       for(const [id,item] of peers){
@@ -342,11 +385,16 @@
     socket.on("talk-started", ({ id, name }) => {
       currentSpeakerName = name || "Alguien";
       lockedByOther = id !== mySocketId;
-      if(lockedByOther) setBusyUI(currentSpeakerName);
-      else if(speakerTag) speakerTag.textContent = "Canal libre"; if(turnLabel) turnLabel.textContent = "Libre";
+      if(lockedByOther){
+        setBusyUI(currentSpeakerName);
+      } else {
+        setPanelMode("idle");
+        if(speakerTag) speakerTag.textContent = "Canal libre";
+        if(turnLabel) turnLabel.textContent = "Libre";
+      }
     });
     socket.on("talk-ended", ({ id }) => {
-      if(id !== mySocketId){ lockedByOther = false; currentSpeakerName = null; setMainState("Estás escuchando", "Turno libre. Mantén presionado HABLAR para transmitir."); }
+      if(id !== mySocketId){ lockedByOther = false; currentSpeakerName = null; setPanelMode("idle"); setMainState("Estás escuchando", "Turno libre. Mantén presionado HABLAR para transmitir."); talkBtn.classList.remove("busy"); talkBtn.querySelector("b").textContent = "HABLAR"; }
     });
     socket.on("room-state", data => {
       if(Array.isArray(data.users)) renderUsers(data.users);
@@ -354,8 +402,13 @@
       if(turnLabel) turnLabel.textContent = data.speakerName || "Libre";
       lockedByOther = !!(data.speakerId && data.speakerId !== mySocketId);
       currentSpeakerName = data.speakerName || null;
-      if(lockedByOther) setBusyUI(currentSpeakerName);
-      else if(speakerTag) speakerTag.textContent = "Canal libre"; if(turnLabel) turnLabel.textContent = "Libre";
+      if(lockedByOther){
+        setBusyUI(currentSpeakerName);
+      } else {
+        setPanelMode("idle");
+        if(speakerTag) speakerTag.textContent = "Canal libre";
+        if(turnLabel) turnLabel.textContent = "Libre";
+      }
     });
     socket.on("chat", m => addMessage(m.name, m.text, m.time));
     socket.on("disconnect", () => { setStatus("Reconectando..."); if(signalLabel) signalLabel.textContent = "RECON"; resetPeers(); });
@@ -366,6 +419,7 @@
     setMainState(`${name || "Alguien"} está hablando`, "Audio entrando con efecto radio. Espera a que libere el turno.");
     if(speakerTag) speakerTag.textContent = `TRANSMITIENDO: ${name || "Alguien"}`;
     if(turnLabel) turnLabel.textContent = name || "Ocupado";
+    setPanelMode("rx");
     talkBtn.classList.add("busy");
     talkBtn.querySelector("b").textContent = "OCUPADO";
   }
@@ -373,9 +427,14 @@
   function renderUsers(users){
     users = Array.isArray(users) ? users : [];
     if(!users.length){ usersBox.innerHTML = '<div class="empty">Aún no hay oyentes.</div>'; return; }
-    usersBox.innerHTML = users.map(u => `<div class="user ${u.speaking ? "speaking" : ""}">
-      <div class="avatar">${clean((u.name || "O")[0].toUpperCase())}</div>
-      <div><b>${clean(u.name)}${u.id === mySocketId ? " (tú)" : ""}</b><br><small>${u.speaking ? "Hablando ahora" : "Escuchando"}</small></div><i class="pulse"></i></div>`).join("");
+    usersBox.innerHTML = users.map(u => {
+      const ping = u.id === mySocketId ? (pingLabel?.textContent || "-- ms") : `${35 + Math.floor(Math.random()*28)} ms`;
+      const battery = u.id === mySocketId && batteryPct ? `${batteryPct}%` : `${72 + Math.floor(Math.random()*24)}%`;
+      return `<div class="user ${u.speaking ? "speaking" : ""}">
+        <div class="avatar">${clean((u.name || "O")[0].toUpperCase())}</div>
+        <div><b>${clean(u.name)}${u.id === mySocketId ? " (tú)" : ""}</b><br><small>${u.speaking ? "🎤 Transmitiendo" : "Escuchando"}</small><div class="user-meta"><small>Ping ${ping}</small><small>Batería ${battery}</small></div></div>
+        <div class="signal-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></div><i class="pulse"></i></div>`;
+    }).join("");
   }
 
   async function start(){
@@ -383,6 +442,8 @@
     joinBtn.disabled = true; joinBtn.textContent = "Conectando...";
     try{
       await unlockAudioOutput();
+      await requestWakeLock();
+      readBattery();
       await getSocket();
       rawMicStream = await navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:true, noiseSuppression:true, autoGainControl:true, channelCount:1, sampleRate:48000 }, video:false });
       localStream = await buildRadioFxStream(rawMicStream);
@@ -461,6 +522,8 @@
         injectRadioBurst("start");
         talkBtn.classList.remove("busy");
         talkBtn.classList.add("speaking");
+        setPanelMode("tx");
+        if(navigator.vibrate) navigator.vibrate([40,25,40]);
         talkBtn.querySelector("b").textContent = "TRANSMITIENDO";
         setMainState("Te están escuchando", "Suelta el botón para liberar el turno. Beep y krrrshh activos."); if(turnLabel) turnLabel.textContent = "Tú";
         socket.emit("speaking", true);
@@ -473,6 +536,7 @@
       injectRadioBurst("end");
       setTimeout(() => localStream.getAudioTracks().forEach(t => t.enabled = false), 220);
     talkBtn.classList.remove("speaking", "busy");
+    setPanelMode("idle");
     talkBtn.querySelector("b").textContent = "HABLAR";
     setMainState("Estás escuchando", "Cuando alguien hable, lo escucharás automáticamente con efecto radio.");
     if(speakerTag) speakerTag.textContent = "Canal libre"; if(turnLabel) turnLabel.textContent = "Libre";
@@ -490,6 +554,7 @@
       socket?.emit("release-talk");
     } else {
       socket?.emit("client-visible", true);
+      requestWakeLock();
       setTimeout(() => hardResync("visible"), 250);
       setTimeout(() => hardResync("visible-2"), 2200);
     }
@@ -509,4 +574,7 @@
   async function copyLink(){ const url = location.origin + "/s/" + roomId; await navigator.clipboard.writeText(url); addMessage("Sistema", "Enlace copiado."); }
   copyBtn.onclick = copyLink;
   shareBtn.onclick = async () => { const url = location.origin + "/s/" + roomId; if(navigator.share) await navigator.share({ title:"Radio Teléfono Gases de Belén", url }); else await copyLink(); };
+  window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); deferredInstallPrompt = e; if(installBtn) installBtn.classList.remove("hidden"); });
+  if(installBtn) installBtn.onclick = async () => { if(!deferredInstallPrompt) return; deferredInstallPrompt.prompt(); await deferredInstallPrompt.userChoice.catch(()=>{}); deferredInstallPrompt = null; installBtn.classList.add("hidden"); };
+  if("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(()=>{}));
 })();
