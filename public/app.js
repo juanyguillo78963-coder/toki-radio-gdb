@@ -2,7 +2,7 @@
   const $ = id => document.getElementById(id);
   const joinPanel = $("joinPanel"), radioPanel = $("radioPanel"), joinBtn = $("joinBtn"), nameInput = $("nameInput");
   const talkBtn = $("talkBtn"), connStatus = $("connStatus"), modeTitle = $("modeTitle"), modeText = $("modeText");
-  const usersBox = $("users"), messages = $("messages"), chatInput = $("chatInput"), sendBtn = $("sendBtn");
+  const usersBox = $("users"), usersCompact = $("usersCompact"), messages = $("messages"), chatInput = $("chatInput"), sendBtn = $("sendBtn");
   const muteBtn = $("muteBtn"), shareBtn = $("shareBtn"), copyBtn = $("copyBtn");
   const radioFxStatus = $("radioFxStatus"), speakerTag = $("speakerTag"), unlockBtn = $("unlockBtn");
   const volumeSlider = $("volumeSlider"), countLabel = $("countLabel"), turnLabel = $("turnLabel"), signalLabel = $("signalLabel"), audioLabel = $("audioLabel");
@@ -494,7 +494,11 @@
     lastUsers = users;
     renderMapPins(users);
     const mc = document.getElementById("mapCount"); if(mc) mc.textContent = users.length;
-    if(!users.length){ usersBox.innerHTML = '<div class="empty">Aún no hay oyentes.</div>'; return; }
+    const ic = document.getElementById("inlineCount"); if(ic) ic.textContent = users.length;
+    if(usersCompact){
+      usersCompact.innerHTML = users.length ? users.map(u => `<div class="user-compact ${u.speaking ? "speaking" : ""}"><span class="dot"></span><b>${clean(u.name)}${u.id === mySocketId ? " (tú)" : ""}</b><small>${u.speaking ? "Hablando" : "En línea"}</small></div>`).join("") : '<div class="empty">Esperando operadores...</div>';
+    }
+    if(!users.length){ usersBox.innerHTML = '<div class="empty">Aún no hay operadores.</div>'; return; }
     usersBox.innerHTML = users.map(u => {
       const ping = u.id === mySocketId ? (pingLabel?.textContent || "-- ms") : `${35 + Math.floor(Math.random()*28)} ms`;
       const battery = u.id === mySocketId && batteryPct ? `${batteryPct}%` : `${72 + Math.floor(Math.random()*24)}%`;
@@ -518,6 +522,8 @@
     users = Array.isArray(users) ? users : [];
     const map = document.getElementById("liveMap");
     if(!map) return;
+    const oldLabel = map.querySelector(".me-pin");
+    if(oldLabel && oldLabel.textContent.includes("TU UBICACIÓN")){ oldLabel.innerHTML = "<span>⌁</span>"; oldLabel.classList.add("clean-pin"); }
 
     // Si Mapbox ya inició, usar mapa real. Si no, usar respaldo táctico.
     if(!mapboxReady){
@@ -736,14 +742,4 @@
     renderMapPins(lastUsers);
   });
   if("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(()=>{}));
-})();
-
-// Reloj visual inferior
-(() => {
-  const el = document.getElementById('clockLabel');
-  if(!el) return;
-  const tick = () => {
-    try { el.textContent = new Date().toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit' }); } catch { el.textContent = '--:--'; }
-  };
-  tick(); setInterval(tick, 30000);
 })();

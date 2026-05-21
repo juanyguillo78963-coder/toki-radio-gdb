@@ -3,59 +3,51 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#050805" />
-  <title>Radio Telefónico | Gases de Belén</title>
+  <meta name="theme-color" content="#080b07" />
+  <title>Radio Telefónico Militar | Gases de Belén</title>
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.css" />
-  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/style.css?v=ui-operadores-20260521" />
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.js"></script>
   <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
   <div class="terrain"></div><div class="grain"></div>
-  <main class="app shell">
-    <aside class="side-rail">
-      <div class="tower">⌁</div>
-      <button class="rail-btn active"><span>⌁</span><b>Radio</b></button>
-      <button class="rail-btn"><span>◷</span><b>Historial</b></button>
-      <button class="rail-btn"><span>⚙</span><b>Ajustes</b></button>
-      <div class="rail-profile"><div class="avatar-mini">O1</div><b>Operador</b><small>En línea</small></div>
-    </aside>
-
-    <section class="radio-console">
+  <main class="app">
+    <section class="phone radio-screen">
       <header class="brandbar">
         <button class="hamb">☰</button>
-        <div class="brand-copy"><h1>GASES DE BELÉN</h1><p>RADIO TELEFÓNICO</p></div>
-        <div class="signal-card"><div class="bars"><i></i><i></i><i></i><i></i></div><span>SEÑAL<br><b>EXCELENTE</b></span></div>
+        <div><h1>GASES DE BELÉN</h1><p>RADIO TELEFÓNICO</p></div>
+        <div class="shield">▣</div>
       </header>
 
       <section id="joinPanel" class="join-card">
         <h2>Central Operativa</h2>
-        <p>Entra con tu nombre de operador para activar radio, chat y ubicación en tiempo real.</p>
+        <p>Entra con tu nombre de operador para activar radio y ubicación en tiempo real.</p>
         <input id="nameInput" maxlength="32" placeholder="Nombre del operador" autocomplete="name" />
         <button id="joinBtn" class="primary">ENTRAR A RADIO</button>
         <button id="unlockBtn" class="ghost unlock hidden" type="button">🔊 ACTIVAR SONIDO</button>
-        <small>Permite micrófono y ubicación para ver operadores en vivo.</small>
+        <small>Permite micrófono y ubicación para ver repartidores en vivo.</small>
       </section>
 
-      <section id="radioPanel" class="radio-panel hidden">
+      <section id="radioPanel" class="hidden radio-panel">
         <div class="ops-head">
           <div><small>CANAL ACTIVO</small><b>OPERACIONES</b></div>
-          <div class="big-bars"><i></i><i></i><i></i><i></i></div>
+          <div class="bars"><i></i><i></i><i></i><i></i></div>
         </div>
-
-        <div class="online-card">
-          <div class="online-title"><b id="countLabel">0</b><span>USUARIOS CONECTADOS</span><em id="connStatus">Conectando...</em></div>
-          <div id="users" class="users"><div class="empty">Aún no hay operadores.</div></div>
-        </div>
-
-        <div class="ptt-zone">
-          <div class="pulse-dots"></div>
+        <div class="online-row"><b id="countLabel">0</b> USUARIOS CONECTADOS <span id="connStatus">Conectando...</span></div>
+        <section class="operators-inline">
+          <h3>OPERADORES CONECTADOS <b id="inlineCount">0</b></h3>
+          <div id="usersCompact" class="users-compact"><div class="empty">Esperando operadores...</div></div>
+        </section>
+        <div class="wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="status-strip"><span id="radioFxStatus">SONIDO RADIO REAL</span><strong id="speakerTag">CANAL LIBRE</strong></div>
+        <div class="radar-mini"><span></span><em></em></div>
+        <div class="ptt-wrap">
           <button id="talkBtn" class="talk" aria-label="Presiona para hablar">
-            <em class="onair-label">PTT</em><span class="micIcon">📻</span><b>HABLAR</b><small>PRESIONA PARA HABLAR</small>
+            <em class="onair-label">PTT</em><span class="micIcon">📻</span><b>PTT</b><small>PRESIONA PARA HABLAR</small>
           </button>
         </div>
-
         <h2 id="modeTitle">Estás escuchando</h2>
         <p id="modeText">Cuando alguien hable, lo escucharás automáticamente.</p>
         <div class="volume-card">
@@ -68,32 +60,34 @@
           <button id="copyBtn" class="cmd">COPIAR<br><b>ENLACE</b></button>
           <button id="shareBtn" class="cmd danger">PRIORIDAD<br><b>ALERTA</b></button>
         </div>
-        <div class="hidden"><span id="radioFxStatus">SONIDO RADIO REAL</span><strong id="speakerTag">CANAL LIBRE</strong><span id="turnLabel">Libre</span><span id="signalLabel">ONLINE</span><span id="audioLabel">RADIO FX</span><span id="pingLabel">-- ms</span><span id="bottomPing">-- ms</span><span id="wakeLabel">Listo</span><button id="installBtn" class="hidden">Instalar</button></div>
+        <div class="hidden"><span id="turnLabel">Libre</span><span id="signalLabel">ONLINE</span><span id="audioLabel">RADIO FX</span><span id="pingLabel">-- ms</span><span id="bottomPing">-- ms</span><span id="wakeLabel">Listo</span><button id="installBtn" class="hidden">Instalar</button></div>
       </section>
     </section>
 
-    <section class="right-console">
+    <section class="phone map-screen">
+      <header class="subbar"><button>‹</button><h2>MAPA EN VIVO</h2><button>⌖</button></header>
       <div id="liveMap" class="map-live">
         <div class="gridmap"></div>
-        <div class="map-scan"></div>
-        <div class="me-pin"><span>⌁</span></div>
+        <div class="me-pin clean-pin" aria-label="Central Gases de Belén"><span>⌁</span></div>
         <button id="mapTokenBtn" class="map-token-btn" type="button">ACTIVAR MAPBOX</button>
       </div>
-
+      <section class="operators panel">
+        <h3>CONECTADOS <b id="mapCount">0</b></h3>
+        <div id="users" class="users"><div class="empty">Aún no hay oyentes.</div></div>
+      </section>
       <section class="chat-panel panel">
-        <h3>💬 CHAT DEL CANAL <b id="mapCount">0</b></h3>
+        <h3>CHAT RÁPIDO</h3>
         <div id="messages" class="messages"></div>
         <div class="chatbox"><input id="chatInput" placeholder="Escribe un mensaje..." /><button id="sendBtn">➤</button></div>
       </section>
     </section>
   </main>
-
   <footer class="featurebar">
-    <article><b id="clockLabel">--:--</b><span>Operación en vivo</span></article>
-    <article><b>CIFRADO ACTIVO</b><span>Canal protegido</span></article>
-    <article><b>CONEXIÓN ESTABLE</b><span>Ultra Sync</span></article>
-    <article><b>VERSIÓN 2.1.0</b><span>Gases de Belén</span></article>
+    <article><b>SONIDO RADIO REAL</b><span>Voz clara y potente.</span></article>
+    <article><b>MAPA EN VIVO</b><span>Repartidores en tiempo real.</span></article>
+    <article><b>PTT</b><span>Presiona para hablar.</span></article>
+    <article><b>RECONEXIÓN</b><span>Se recupera sola.</span></article>
   </footer>
-  <script src="/app.js"></script>
+  <script src="/app.js?v=ui-operadores-20260521"></script>
 </body>
 </html>
