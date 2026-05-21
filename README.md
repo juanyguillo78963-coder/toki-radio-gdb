@@ -1,18 +1,18 @@
-# Radio Teléfono GDB - Militar Liviana PRO
+# Radio Teléfono Gases de Belén — Militar GodMode Liviano
 
-Versión limpia y rápida: una sola frecuencia, PTT, VOX manos libres, sonido tipo radio, wake lock, PWA instalable, reconexión automática, grabación local y botón de ubicación.
+Versión más bonita y ligera: estilo militar real, PTT 3D, efecto radio policial, modo conducción, prioridad, VOX, grabación local, reconexión, PWA y UI limpia sin métricas técnicas.
 
-## Ejecutar local
+## Instalar
 ```bash
 npm install
 npm start
 ```
-Abrir: http://localhost:3000/s/gases-belen
+Abre `http://localhost:3000`.
 
 ## Subir a Render
-Build command: `npm install`
-Start command: `npm start`
+- New > Web Service
+- Build command: `npm install`
+- Start command: `npm start`
 
-## Instalar como app
-Android Chrome: menú ⋮ > Instalar app.
-iPhone Safari: compartir > Agregar a pantalla de inicio.
+## Como app
+Abre el dominio desde Chrome/Safari y usa **Instalar app** o **Agregar a pantalla de inicio**.

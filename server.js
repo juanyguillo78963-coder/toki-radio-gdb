@@ -12,7 +12,7 @@ app.use(express.static(path.join(__dirname, "public"), { maxAge: "30s" }));
 
 app.get("/", (_, res) => res.redirect("/s/gases-belen"));
 app.get("/s/:room", (_, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
-app.get("/health", (_, res) => res.json({ ok: true, version: "SYNC-PRO-6-ULTRA-SYNC", name: "Radio Telefono GDB" }));
+app.get("/health", (_, res) => res.json({ ok: true, version: "GDB-MILITAR-GODMODE-LIVIANO", name: "Radio Telefono GDB" }));
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -171,6 +171,17 @@ io.on("connection", socket => {
     if (!value) return releaseSpeaker(roomId, socket.id);
     io.to(roomId).emit("peer-speaking", { id: socket.id, speaking: true, name: user.name });
     syncRoom(roomId);
+  });
+
+
+  socket.on("priority-alert", payload => {
+    const room = socket.data.roomId;
+    if (!room) return;
+    io.to(room).emit("priority-alert", {
+      id: socket.id,
+      name: cleanName(payload?.name || socket.data.name || "Operador"),
+      time: Date.now()
+    });
   });
 
   socket.on("chat", value => {

@@ -11,12 +11,13 @@
 </head>
 <body>
   <div class="scanline"></div>
+  <div id="priorityFlash" class="priority-flash hidden">PRIORIDAD</div>
   <main class="shell tactical-shell">
     <section class="radio tactical-radio">
       <header class="topbar">
         <div class="brand">
-          <div class="logo">▰</div>
-          <div><strong>GASES DE BELÉN</strong><span>Radio privada · Siempre contigo</span></div>
+          <div class="logo">GDB</div>
+          <div><strong>GASES DE BELÉN</strong><span>Radio táctica privada · Siempre contigo</span></div>
         </div>
         <div class="top-actions"><button id="installBtn" class="icon-btn hidden" type="button">Instalar app</button><div class="badge"><i></i> EN LÍNEA</div></div>
       </header>
@@ -39,13 +40,20 @@
 
         <div class="hidden" aria-hidden="true"><span id="signalLabel">ONLINE</span><span id="audioLabel">OK</span><span id="pingLabel">-- ms</span><span id="bottomPing">-- ms</span><span id="wakeLabel">Listo</span></div>
 
-        <div class="radio-status-bar"><span id="radioFxStatus">Radio lista</span><span id="speakerTag">Libre</span></div>
+        <div class="power-wrap">
+          <button id="powerBtn" class="power-btn active" type="button" aria-pressed="true">
+            <span class="power-dot"></span> RADIO ACTIVADA
+          </button>
+          <small id="powerHint">Activa para escuchar y hablar. Desactiva para quedar totalmente en silencio.</small>
+        </div>
+        <div class="operation-strip"><span id="radioFxStatus">RADIO LISTA</span><strong id="speakerTag">LIBRE</strong></div>
         <div class="live-wave" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        <div class="operation-title">OPERACIÓN GDB ACTIVA</div>
         <div class="visualizer tactical-visualizer">
           <div class="wave-stack"><i></i><i></i><i></i><i></i><i></i></div>
           <button id="talkBtn" class="talk" aria-label="Mantén presionado para hablar">
             <em class="onair-label">ON AIR</em>
-            <span class="micIcon">📻</span>
+            <span class="micIcon">PTT</span>
             <b>HABLAR</b>
             <small>Mantén presionado</small>
           </button>
@@ -65,7 +73,8 @@
           <button id="muteBtn" class="ghost">Silenciar</button>
           <button id="voxBtn" class="ghost">VOX: OFF</button>
           <button id="recBtn" class="ghost">Grabar</button>
-          <button id="locBtn" class="ghost">Ubicación</button>
+          <button id="driveBtn" class="ghost">Modo conducción</button>
+          <button id="priorityBtn" class="ghost danger">Prioridad</button>
           <button id="copyBtn" class="ghost">Copiar link</button>
         </div>
         <a id="downloadRec" class="download hidden" download="radio-gdb-transmision.webm">Descargar grabación</a>

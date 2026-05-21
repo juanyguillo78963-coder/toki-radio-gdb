@@ -3,8 +3,8 @@
   const joinPanel = $("joinPanel"), radioPanel = $("radioPanel"), joinBtn = $("joinBtn"), nameInput = $("nameInput");
   const talkBtn = $("talkBtn"), connStatus = $("connStatus"), modeTitle = $("modeTitle"), modeText = $("modeText");
   const usersBox = $("users"), messages = $("messages"), chatInput = $("chatInput"), sendBtn = $("sendBtn");
-  const muteBtn = $("muteBtn"), shareBtn = $("shareBtn"), copyBtn = $("copyBtn"), voxBtn = $("voxBtn"), recBtn = $("recBtn"), locBtn = $("locBtn"), downloadRec = $("downloadRec"), miniMap = $("miniMap"), locText = $("locText");
-  const radioFxStatus = $("radioFxStatus"), speakerTag = $("speakerTag"), unlockBtn = $("unlockBtn");
+  const muteBtn = $("muteBtn"), shareBtn = $("shareBtn"), copyBtn = $("copyBtn"), voxBtn = $("voxBtn"), recBtn = $("recBtn"), driveBtn = $("driveBtn"), priorityBtn = $("priorityBtn"), priorityFlash = $("priorityFlash"), downloadRec = $("downloadRec"), miniMap = $("miniMap"), locText = $("locText");
+  const radioFxStatus = $("radioFxStatus"), speakerTag = $("speakerTag"), unlockBtn = $("unlockBtn"), powerBtn = $("powerBtn"), powerHint = $("powerHint");
   const volumeSlider = $("volumeSlider"), countLabel = $("countLabel"), turnLabel = $("turnLabel"), signalLabel = $("signalLabel"), audioLabel = $("audioLabel");
   const pingLabel = $("pingLabel"), bottomPing = $("bottomPing"), wakeLabel = $("wakeLabel"), installBtn = $("installBtn");
   let lockedByOther = false;
@@ -22,6 +22,8 @@
   let radioFxReady = false;
   let mutedOutput = false;
   let joined = false;
+  let radioEnabled = true;
+  let volumeKeyDown = false;
   let mySocketId = null;
   let currentName = "Oyente";
   const roomId = location.pathname.startsWith("/s/") ? decodeURIComponent(location.pathname.split("/s/")[1] || "gases-belen") : "gases-belen";
@@ -219,12 +221,12 @@
       fxDestination = audioCtx.createMediaStreamDestination();
       source.connect(high).connect(low).connect(presence).connect(shaper).connect(comp).connect(gain).connect(limiter).connect(fxDestination);
       radioFxReady = true;
-      if(radioFxStatus) radioFxStatus.textContent = "EFECTO RADIO: WALKIE-TALKIE ACTIVO";
+      if(radioFxStatus) radioFxStatus.textContent = "RADIO POLICIAL ACTIVA";
       return fxDestination.stream;
     }catch(e){
       console.warn("No se pudo activar efecto radio", e);
       radioFxReady = false;
-      if(radioFxStatus) radioFxStatus.textContent = "EFECTO RADIO: BÁSICO";
+      if(radioFxStatus) radioFxStatus.textContent = "RADIO BÁSICA";
       return rawStream;
     }
   }
@@ -263,6 +265,37 @@
     }catch(e){ showUnlockAudio(); }
   }
 
+
+  function setRadioPower(on){
+    radioEnabled = !!on;
+    if(powerBtn){
+      powerBtn.classList.toggle("active", radioEnabled);
+      powerBtn.classList.toggle("off", !radioEnabled);
+      powerBtn.setAttribute("aria-pressed", radioEnabled ? "true" : "false");
+      powerBtn.innerHTML = `<span class="power-dot"></span>${radioEnabled ? "RADIO ACTIVADA" : "RADIO DESACTIVADA"}`;
+    }
+    if(powerHint){ powerHint.textContent = radioEnabled ? "Puedes escuchar y mantener presionado para hablar." : "No escuchas nada y el micrófono queda bloqueado."; }
+    document.body.classList.toggle("radio-off", !radioEnabled);
+    document.querySelectorAll("audio").forEach(a => { a.muted = !radioEnabled || mutedOutput; if(radioEnabled && !mutedOutput) forceAudioPlay(a); });
+    if(localStream) localStream.getAudioTracks().forEach(t => t.enabled = false);
+    if(!radioEnabled){
+      try{ socket?.emit("speaking", false); socket?.emit("release-talk"); }catch{}
+      talkBtn.classList.remove("speaking", "busy");
+      talkBtn.querySelector("b").textContent = "BLOQUEADO";
+      setMainState("Radio desactivada", "Activa la radio para escuchar y hablar.");
+      if(speakerTag) speakerTag.textContent = "OFF";
+    } else {
+      talkBtn.querySelector("b").textContent = "HABLAR";
+      setMainState("Estás escuchando", "Mantén presionado HABLAR para transmitir.");
+      if(speakerTag) speakerTag.textContent = "LIBRE";
+      resumeAudioEngine();
+    }
+  }
+
+  function isVolumePttKey(e){
+    const k = String(e.key || e.code || "").toLowerCase();
+    return k.includes("volumeup") || k.includes("audiovolumeup");
+  }
 
   function playBusyTone(){
     try{
@@ -482,7 +515,7 @@
         setBusyUI(currentSpeakerName);
       } else {
         setPanelMode("idle");
-        if(speakerTag) speakerTag.textContent = "Canal libre";
+        if(speakerTag) speakerTag.textContent = "LIBRE";
         if(turnLabel) turnLabel.textContent = "Libre";
       }
     });
@@ -499,11 +532,12 @@
         setBusyUI(currentSpeakerName);
       } else {
         setPanelMode("idle");
-        if(speakerTag) speakerTag.textContent = "Canal libre";
+        if(speakerTag) speakerTag.textContent = "LIBRE";
         if(turnLabel) turnLabel.textContent = "Libre";
       }
     });
     socket.on("chat", m => addMessage(m.name, m.text, m.time));
+    socket.on("priority-alert", data => triggerPriorityLocal(data?.name || "Operador"));
     socket.on("disconnect", () => { setStatus("Reconectando..."); if(signalLabel) signalLabel.textContent = "RECON"; resetPeers(); });
     socket.on("reconnect", () => joinSocketRoom());
   }
@@ -596,6 +630,7 @@
   }
 
   function setSpeaking(on){
+    if(!radioEnabled){ playBusyTone(); return; }
     if(!localStream || !joined || !socket?.connected) return;
 
     if(on){
@@ -621,7 +656,7 @@
         talkBtn.querySelector("b").textContent = "TRANSMITIENDO";
         setMainState("Te están escuchando", "Suelta el botón para liberar el turno. Beep y krrrshh activos."); if(turnLabel) turnLabel.textContent = "Tú";
         socket.emit("speaking", true);
-        if(speakerTag) speakerTag.textContent = "TÚ ESTÁS TRANSMITIENDO";
+        if(speakerTag) speakerTag.textContent = "TÚ TRANSMITES";
       });
       return;
     }
@@ -633,7 +668,7 @@
     setPanelMode("idle");
     talkBtn.querySelector("b").textContent = "HABLAR";
     setMainState("Estás escuchando", "Cuando alguien hable, lo escucharás automáticamente con efecto radio.");
-    if(speakerTag) speakerTag.textContent = "Canal libre"; if(turnLabel) turnLabel.textContent = "Libre";
+    if(speakerTag) speakerTag.textContent = "LIBRE"; if(turnLabel) turnLabel.textContent = "Libre";
     socket.emit("speaking", false);
     socket.emit("release-talk");
   }
@@ -658,16 +693,43 @@
   window.addEventListener("online", () => { if(joined) setTimeout(() => hardResync("online"), 250); });
   window.addEventListener("pagehide", () => { if(joined){ socket?.emit("client-visible", false); socket?.emit("release-talk"); } });
   joinBtn.addEventListener("click", start);
+  if(powerBtn) powerBtn.addEventListener("click", () => setRadioPower(!radioEnabled));
   ["mousedown","touchstart","pointerdown"].forEach(ev => talkBtn.addEventListener(ev, e => { e.preventDefault(); setSpeaking(true); }, {passive:false}));
   ["mouseup","mouseleave","touchend","touchcancel","pointerup","pointercancel"].forEach(ev => talkBtn.addEventListener(ev, e => { e.preventDefault(); setSpeaking(false); }, {passive:false}));
-  window.addEventListener("keydown", e => { if(e.code === "Space" && !e.repeat && !["INPUT","TEXTAREA"].includes(document.activeElement.tagName)) setSpeaking(true); });
-  window.addEventListener("keyup", e => { if(e.code === "Space" && !["INPUT","TEXTAREA"].includes(document.activeElement.tagName)) setSpeaking(false); });
+  window.addEventListener("keydown", e => {
+    if(["INPUT","TEXTAREA"].includes(document.activeElement.tagName)) return;
+    if(e.code === "Space" && !e.repeat) setSpeaking(true);
+    if(isVolumePttKey(e) && !volumeKeyDown){ volumeKeyDown = true; setSpeaking(true); }
+  });
+  window.addEventListener("keyup", e => {
+    if(["INPUT","TEXTAREA"].includes(document.activeElement.tagName)) return;
+    if(e.code === "Space") setSpeaking(false);
+    if(isVolumePttKey(e)){ volumeKeyDown = false; setSpeaking(false); }
+  });
   function sendChat(){ const text = chatInput.value.trim(); if(!text || !socket?.connected) return; socket.emit("chat", text); chatInput.value = ""; }
   sendBtn.onclick = sendChat; chatInput.addEventListener("keydown", e => { if(e.key === "Enter") sendChat(); });
   if(voxBtn) voxBtn.onclick = toggleVox;
   if(recBtn) recBtn.onclick = toggleRecording;
-  if(locBtn) locBtn.onclick = shareLocation;
-  muteBtn.onclick = () => { mutedOutput = !mutedOutput; document.querySelectorAll("audio").forEach(a => { a.muted = mutedOutput; a.volume = 1; if(!mutedOutput) forceAudioPlay(a); }); muteBtn.textContent = mutedOutput ? "Activar salida" : "Silenciar salida"; };
+  if(driveBtn) driveBtn.onclick = () => {
+    document.body.classList.toggle("drive");
+    const on = document.body.classList.contains("drive");
+    driveBtn.textContent = on ? "Salir conducción" : "Modo conducción";
+    driveBtn.classList.toggle("active", on);
+    if(on && navigator.vibrate) navigator.vibrate(35);
+  };
+  function triggerPriorityLocal(name = currentName){
+    document.body.classList.add("priority-mode");
+    if(priorityFlash){ priorityFlash.classList.remove("hidden"); priorityFlash.textContent = "PRIORIDAD"; }
+    try{ playLocalBeep(990,.12); setTimeout(()=>playLocalBeep(620,.14),160); setTimeout(()=>playLocalBeep(990,.12),340); }catch{}
+    if(navigator.vibrate) navigator.vibrate([120,70,120,70,220]);
+    setTimeout(() => { document.body.classList.remove("priority-mode"); if(priorityFlash) priorityFlash.classList.add("hidden"); }, 2600);
+    addMessage("Prioridad", `${name || "Operador"} activó alerta prioritaria.`);
+  }
+  if(priorityBtn) priorityBtn.onclick = () => {
+    socket?.emit("priority-alert", { name: currentName });
+    triggerPriorityLocal(currentName);
+  };
+  muteBtn.onclick = () => { mutedOutput = !mutedOutput; document.querySelectorAll("audio").forEach(a => { a.muted = mutedOutput || !radioEnabled; a.volume = 1; if(!mutedOutput && radioEnabled) forceAudioPlay(a); }); muteBtn.textContent = mutedOutput ? "Activar salida" : "Silenciar salida"; };
   async function copyLink(){ const url = location.origin + "/s/" + roomId; await navigator.clipboard.writeText(url); addMessage("Sistema", "Enlace copiado."); }
   copyBtn.onclick = copyLink;
   shareBtn.onclick = async () => { const url = location.origin + "/s/" + roomId; if(navigator.share) await navigator.share({ title:"Radio Teléfono Gases de Belén", url }); else await copyLink(); };
