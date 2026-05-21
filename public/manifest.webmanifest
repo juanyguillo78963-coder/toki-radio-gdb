@@ -1,11 +1,10 @@
 {
-  "name":"Radio Teléfono Gases de Belén",
-  "short_name":"Radio GDB",
-  "start_url":"/s/gases-belen",
-  "scope":"/",
-  "display":"standalone",
-  "orientation":"portrait",
-  "background_color":"#050805",
-  "theme_color":"#050805",
-  "icons":[{"src":"/icon.svg","sizes":"512x512","type":"image/svg+xml","purpose":"any maskable"}]
+  "name": "Radio Gases de Belén",
+  "short_name": "Radio GDB",
+  "start_url": "/s/gases-belen",
+  "display": "standalone",
+  "background_color": "#020611",
+  "theme_color": "#050914",
+  "orientation": "portrait",
+  "icons": []
 }

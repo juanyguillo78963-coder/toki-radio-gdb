@@ -1,18 +1,22 @@
-# Radio Teléfono Gases de Belén — Militar GodMode Liviano
+# Radio Teléfono Gases de Belén — SYNC PRO 6 ULTRA
 
-Versión más bonita y ligera: estilo militar real, PTT 3D, efecto radio policial, modo conducción, prioridad, VOX, grabación local, reconexión, PWA y UI limpia sin métricas técnicas.
+Versión con interfaz visual mejorada y lógica Ultra Sync para celulares:
+- Reenganche al volver desde otra app.
+- Reparación de audio suspendido por navegador móvil.
+- Reconstrucción de pares WebRTC cuando un celular se desconecta o queda pegado.
+- Limpieza de sockets duplicados del mismo celular.
+- Watchdog de sincronización cada pocos segundos.
+- UI táctica premium y estados de reparación.
 
-## Instalar
+## Render
+Build Command:
 ```bash
 npm install
+```
+Start Command:
+```bash
 npm start
 ```
-Abre `http://localhost:3000`.
 
-## Subir a Render
-- New > Web Service
-- Build command: `npm install`
-- Start command: `npm start`
-
-## Como app
-Abre el dominio desde Chrome/Safari y usa **Instalar app** o **Agregar a pantalla de inicio**.
+Ruta principal:
+`/s/gases-belen`

@@ -12,7 +12,7 @@ app.use(express.static(path.join(__dirname, "public"), { maxAge: "30s" }));
 
 app.get("/", (_, res) => res.redirect("/s/gases-belen"));
 app.get("/s/:room", (_, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
-app.get("/health", (_, res) => res.json({ ok: true, version: "GDB-MILITAR-GODMODE-LIVIANO", name: "Radio Telefono GDB" }));
+app.get("/health", (_, res) => res.json({ ok: true, version: "SYNC-PRO-6-ULTRA-SYNC", name: "Radio Telefono GDB" }));
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -35,7 +35,7 @@ function publicUsers(roomId) {
   const room = getRoom(roomId);
   return Array.from(room.users.values())
     .sort((a, b) => a.joinedAt - b.joinedAt)
-    .map(u => ({ id: u.id, name: u.name, speaking: room.speakerId === u.id, joinedAt: u.joinedAt, online: true }));
+    .map(u => ({ id: u.id, name: u.name, speaking: room.speakerId === u.id, joinedAt: u.joinedAt, online: true, location: u.location || null, locationAt: u.locationAt || null }));
 }
 function syncRoom(roomId) {
   const room = getRoom(roomId);
@@ -92,7 +92,9 @@ io.on("connection", socket => {
       name: userName,
       joinedAt: room.users.get(socket.id)?.joinedAt || Date.now(),
       lastSeen: Date.now(),
-      visible: true
+      visible: true,
+      location: room.users.get(socket.id)?.location || null,
+      locationAt: room.users.get(socket.id)?.locationAt || null
     });
 
     const existing = Array.from(room.users.values())
@@ -106,6 +108,25 @@ io.on("connection", socket => {
   });
 
   socket.on("latency-check", ack => { if (typeof ack === "function") ack({ ok: true, serverTime: Date.now() }); });
+
+  socket.on("location-update", pos => {
+    const roomId = socket.data.roomId;
+    if (!roomId) return;
+    const user = getRoom(roomId).users.get(socket.id);
+    if (!user) return;
+    const lat = Number(pos?.lat);
+    const lng = Number(pos?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    user.location = {
+      lat: Math.max(-90, Math.min(90, lat)),
+      lng: Math.max(-180, Math.min(180, lng)),
+      accuracy: Number(pos?.accuracy) || null,
+      speed: Number(pos?.speed) || null
+    };
+    user.locationAt = Date.now();
+    user.lastSeen = Date.now();
+    syncRoom(roomId);
+  });
 
   socket.on("request-sync", () => {
     const room = socket.data.roomId;
@@ -171,17 +192,6 @@ io.on("connection", socket => {
     if (!value) return releaseSpeaker(roomId, socket.id);
     io.to(roomId).emit("peer-speaking", { id: socket.id, speaking: true, name: user.name });
     syncRoom(roomId);
-  });
-
-
-  socket.on("priority-alert", payload => {
-    const room = socket.data.roomId;
-    if (!room) return;
-    io.to(room).emit("priority-alert", {
-      id: socket.id,
-      name: cleanName(payload?.name || socket.data.name || "Operador"),
-      time: Date.now()
-    });
   });
 
   socket.on("chat", value => {
