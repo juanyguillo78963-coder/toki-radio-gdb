@@ -6,7 +6,9 @@
   <meta name="theme-color" content="#080b07" />
   <title>Radio Telefónico Militar | Gases de Belén</title>
   <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.css" />
   <link rel="stylesheet" href="/style.css" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.js"></script>
   <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
@@ -63,6 +65,7 @@
       <div id="liveMap" class="map-live">
         <div class="gridmap"></div>
         <div class="me-pin">TU UBICACIÓN<br><small>Gases de Belén</small></div>
+        <button id="mapTokenBtn" class="map-token-btn" type="button">ACTIVAR MAPBOX</button>
       </div>
       <section class="operators panel">
         <h3>CONECTADOS <b id="mapCount">0</b></h3>

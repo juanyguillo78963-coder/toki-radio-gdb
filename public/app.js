@@ -37,6 +37,68 @@
   let batteryPct = null;
   let geoWatchId = null;
   let lastUsers = [];
+  let mapboxMap = null;
+  let mapboxMarkers = new Map();
+  let mapboxReady = false;
+  let myLastLocation = null;
+
+  async function loadMapboxToken(){
+    let token = localStorage.getItem('gdb_mapbox_token') || '';
+    if(!token){
+      try{
+        const r = await fetch('/config', { cache:'no-store' });
+        const cfg = await r.json();
+        token = cfg.mapboxToken || '';
+      }catch{}
+    }
+    return token;
+  }
+
+  async function initMapbox(){
+    if(mapboxReady || !window.mapboxgl) return false;
+    const token = await loadMapboxToken();
+    if(!token){
+      const btn = document.getElementById('mapTokenBtn');
+      if(btn) btn.classList.remove('hidden');
+      return false;
+    }
+    mapboxgl.accessToken = token;
+    try{
+      mapboxMap = new mapboxgl.Map({
+        container: 'liveMap',
+        style: 'mapbox://styles/mapbox/dark-v11',
+        center: [-75.5812, 6.2442],
+        zoom: 12.5,
+        pitch: 45,
+        bearing: -18,
+        attributionControl: false
+      });
+      mapboxMap.addControl(new mapboxgl.NavigationControl({ showCompass:true, showZoom:false }), 'top-right');
+      mapboxReady = true;
+      const btn = document.getElementById('mapTokenBtn');
+      if(btn) btn.classList.add('hidden');
+      return true;
+    }catch(e){
+      console.warn('Mapbox no inició:', e.message);
+      return false;
+    }
+  }
+
+  function configureMapboxButton(){
+    const btn = document.getElementById('mapTokenBtn');
+    if(!btn) return;
+    btn.addEventListener('click', async () => {
+      const token = prompt('Pega tu token público de Mapbox que empieza por pk.');
+      if(token && token.startsWith('pk.')){
+        localStorage.setItem('gdb_mapbox_token', token.trim());
+        await initMapbox();
+        renderMapPins(lastUsers);
+      }else if(token){
+        alert('Ese token no parece público. Debe empezar por pk.');
+      }
+    });
+  }
+
   const peers = new Map();
   const rtcConfig = { iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
@@ -447,15 +509,66 @@
     if(!navigator.geolocation || geoWatchId) return;
     geoWatchId = navigator.geolocation.watchPosition(pos => {
       const c = pos.coords;
-      socket?.emit("location-update", { lat:c.latitude, lng:c.longitude, accuracy:c.accuracy, speed:c.speed });
+      myLastLocation = { lat:c.latitude, lng:c.longitude };
+      socket?.emit("location-update", { lat:c.latitude, lng:c.longitude, accuracy:c.accuracy, speed:c.speed, heading:c.heading });
     }, err => { console.warn("Ubicación no disponible", err.message); }, { enableHighAccuracy:true, maximumAge:5000, timeout:12000 });
   }
 
-  function renderMapPins(users){
+  async function renderMapPins(users){
+    users = Array.isArray(users) ? users : [];
     const map = document.getElementById("liveMap");
     if(!map) return;
-    map.querySelectorAll(".map-pin").forEach(e => e.remove());
+
+    // Si Mapbox ya inició, usar mapa real. Si no, usar respaldo táctico.
+    if(!mapboxReady){
+      await initMapbox();
+    }
+
     const located = users.filter(u => u.location && Number.isFinite(Number(u.location.lat)) && Number.isFinite(Number(u.location.lng)));
+
+    if(mapboxReady && mapboxMap){
+      // Quitar marcadores que ya no existen.
+      for(const [id, marker] of Array.from(mapboxMarkers.entries())){
+        if(!located.some(u => u.id === id)){
+          marker.remove();
+          mapboxMarkers.delete(id);
+        }
+      }
+
+      const bounds = new mapboxgl.LngLatBounds();
+      for(const u of located){
+        const lat = Number(u.location.lat), lng = Number(u.location.lng);
+        bounds.extend([lng, lat]);
+
+        let marker = mapboxMarkers.get(u.id);
+        if(!marker){
+          const el = document.createElement('div');
+          el.className = 'mapbox-marker';
+          el.textContent = clean((u.name || 'R')[0].toUpperCase());
+          marker = new mapboxgl.Marker(el)
+            .setLngLat([lng, lat])
+            .setPopup(new mapboxgl.Popup({ offset: 18, className:'mapbox-popup' }).setHTML(`<b>${clean(u.name)}${u.id===mySocketId ? ' (tú)' : ''}</b><br>${u.speaking ? 'Transmitiendo' : 'En línea'}`))
+            .addTo(mapboxMap);
+          mapboxMarkers.set(u.id, marker);
+        }else{
+          marker.setLngLat([lng, lat]);
+          marker.getPopup().setHTML(`<b>${clean(u.name)}${u.id===mySocketId ? ' (tú)' : ''}</b><br>${u.speaking ? 'Transmitiendo' : 'En línea'}`);
+        }
+        const el = marker.getElement();
+        el.classList.toggle('speaking', !!u.speaking);
+      }
+
+      if(located.length === 1){
+        const u = located[0];
+        mapboxMap.easeTo({ center:[Number(u.location.lng), Number(u.location.lat)], zoom:15, duration:900 });
+      }else if(located.length > 1){
+        mapboxMap.fitBounds(bounds, { padding:60, maxZoom:15, duration:900 });
+      }
+      return;
+    }
+
+    // Respaldo visual cuando no hay token o Mapbox no cargó.
+    map.querySelectorAll(".map-pin").forEach(e => e.remove());
     if(!located.length) return;
     const lats = located.map(u => Number(u.location.lat));
     const lngs = located.map(u => Number(u.location.lng));
@@ -617,5 +730,10 @@
   shareBtn.onclick = async () => { const url = location.origin + "/s/" + roomId; if(navigator.share) await navigator.share({ title:"Radio Teléfono Gases de Belén", url }); else await copyLink(); };
   window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); deferredInstallPrompt = e; if(installBtn) installBtn.classList.remove("hidden"); });
   if(installBtn) installBtn.onclick = async () => { if(!deferredInstallPrompt) return; deferredInstallPrompt.prompt(); await deferredInstallPrompt.userChoice.catch(()=>{}); deferredInstallPrompt = null; installBtn.classList.add("hidden"); };
+  configureMapboxButton();
+  window.addEventListener("load", async () => {
+    await initMapbox();
+    renderMapPins(lastUsers);
+  });
   if("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(()=>{}));
 })();

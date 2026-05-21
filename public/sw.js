@@ -1,4 +1,4 @@
-const CACHE = 'gdb-radio-kandu-tactical-v1';
+const CACHE = 'gdb-radio-kandu-tactical-v2-mapbox-fix';
 const ASSETS = ['/', '/s/gases-belen', '/style.css', '/app.js', '/manifest.webmanifest'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)).catch(() => null));

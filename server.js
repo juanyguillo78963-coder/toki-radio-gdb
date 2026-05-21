@@ -12,7 +12,8 @@ app.use(express.static(path.join(__dirname, "public"), { maxAge: "30s" }));
 
 app.get("/", (_, res) => res.redirect("/s/gases-belen"));
 app.get("/s/:room", (_, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
-app.get("/health", (_, res) => res.json({ ok: true, version: "SYNC-PRO-6-ULTRA-SYNC", name: "Radio Telefono GDB" }));
+app.get("/health", (_, res) => res.json({ ok: true, version: "MAPBOX-GPS-REAL-FIX", name: "Radio Telefono GDB" }));
+app.get("/config", (_, res) => res.json({ mapboxToken: process.env.MAPBOX_TOKEN || "" }));
 
 const server = http.createServer(app);
 const io = new Server(server, {
