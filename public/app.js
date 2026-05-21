@@ -41,6 +41,9 @@
   let mapboxMarkers = new Map();
   let mapboxReady = false;
   let myLastLocation = null;
+  let mapAutoCentered = false;
+  let mapUserMoved = false;
+  let mapProgrammaticMove = false;
 
   async function loadMapboxToken(){
     let token = localStorage.getItem('gdb_mapbox_token') || '';
@@ -73,7 +76,10 @@
         bearing: -18,
         attributionControl: false
       });
-      mapboxMap.addControl(new mapboxgl.NavigationControl({ showCompass:true, showZoom:false }), 'top-right');
+      mapboxMap.addControl(new mapboxgl.NavigationControl({ showCompass:true, showZoom:true }), 'top-right');
+      ['dragstart','zoomstart','rotatestart','pitchstart'].forEach(evt => {
+        mapboxMap.on(evt, () => { if(!mapProgrammaticMove) mapUserMoved = true; });
+      });
       mapboxReady = true;
       const btn = document.getElementById('mapTokenBtn');
       if(btn) btn.classList.add('hidden');
@@ -507,6 +513,13 @@
     }).join("");
   }
 
+
+  function getInitial(name){
+    const txt = String(name || 'O').trim();
+    const first = txt ? txt[0] : 'O';
+    return clean(first.toUpperCase());
+  }
+
   function emitMyLocation(coords){
     if(!coords || !socket?.connected) return;
     myLastLocation = { lat:coords.latitude, lng:coords.longitude };
@@ -567,7 +580,7 @@
         if(!marker){
           const el = document.createElement('div');
           el.className = 'mapbox-marker';
-          el.innerHTML = '<span class="pin-core">⌖</span>';
+          el.innerHTML = `<span class="pin-core">${getInitial(u.name)}</span>`;
           el.title = clean(u.name || 'Operador');
           marker = new mapboxgl.Marker(el)
             .setLngLat([lng, lat])
@@ -579,14 +592,22 @@
         const el = marker.getElement();
         el.classList.toggle('speaking', !!u.speaking);
         el.classList.toggle('me', u.id === mySocketId);
+        el.innerHTML = `<span class="pin-core">${getInitial(u.name)}</span>`;
         el.title = clean(u.name || 'Operador');
       }
 
-      if(located.length === 1){
-        const u = located[0];
-        mapboxMap.easeTo({ center:[Number(u.location.lng), Number(u.location.lat)], zoom:15, duration:900 });
-      }else if(located.length > 1){
-        mapboxMap.fitBounds(bounds, { padding:60, maxZoom:15, duration:900 });
+      // Centrar solo una vez al cargar o cuando aparece la primera ubicación.
+      // Después respetamos el zoom/movimiento manual del usuario.
+      if(!mapUserMoved && !mapAutoCentered){
+        mapProgrammaticMove = true;
+        if(located.length === 1){
+          const u = located[0];
+          mapboxMap.easeTo({ center:[Number(u.location.lng), Number(u.location.lat)], zoom:15, duration:700 });
+        }else if(located.length > 1){
+          mapboxMap.fitBounds(bounds, { padding:70, maxZoom:15, duration:700 });
+        }
+        mapAutoCentered = true;
+        setTimeout(() => { mapProgrammaticMove = false; }, 900);
       }
       return;
     }
@@ -609,7 +630,7 @@
       pin.style.left = Math.max(8, Math.min(88, x)) + "%";
       pin.style.top = Math.max(14, Math.min(84, y)) + "%";
       pin.title = clean(u.name || "Operador");
-      pin.innerHTML = '<span class="pin-core">⌖</span>';
+      pin.innerHTML = `<span class="pin-core">${getInitial(u.name)}</span>`;
       map.appendChild(pin);
     }
   }
