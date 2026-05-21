@@ -2,7 +2,7 @@
   const $ = id => document.getElementById(id);
   const joinPanel = $("joinPanel"), radioPanel = $("radioPanel"), joinBtn = $("joinBtn"), nameInput = $("nameInput");
   const talkBtn = $("talkBtn"), connStatus = $("connStatus"), modeTitle = $("modeTitle"), modeText = $("modeText");
-  const usersBox = $("users"), usersCompact = $("usersCompact"), messages = $("messages"), chatInput = $("chatInput"), sendBtn = $("sendBtn");
+  const usersBox = $("users"), messages = $("messages"), chatInput = $("chatInput"), sendBtn = $("sendBtn");
   const muteBtn = $("muteBtn"), shareBtn = $("shareBtn"), copyBtn = $("copyBtn");
   const radioFxStatus = $("radioFxStatus"), speakerTag = $("speakerTag"), unlockBtn = $("unlockBtn");
   const volumeSlider = $("volumeSlider"), countLabel = $("countLabel"), turnLabel = $("turnLabel"), signalLabel = $("signalLabel"), audioLabel = $("audioLabel");
@@ -494,36 +494,53 @@
     lastUsers = users;
     renderMapPins(users);
     const mc = document.getElementById("mapCount"); if(mc) mc.textContent = users.length;
-    const ic = document.getElementById("inlineCount"); if(ic) ic.textContent = users.length;
-    if(usersCompact){
-      usersCompact.innerHTML = users.length ? users.map(u => `<div class="user-compact ${u.speaking ? "speaking" : ""}"><span class="dot"></span><b>${clean(u.name)}${u.id === mySocketId ? " (tú)" : ""}</b><small>${u.speaking ? "Hablando" : "En línea"}</small></div>`).join("") : '<div class="empty">Esperando operadores...</div>';
-    }
-    if(!users.length){ usersBox.innerHTML = '<div class="empty">Aún no hay operadores.</div>'; return; }
+    if(!users.length){ usersBox.innerHTML = '<div class="empty">Aún no hay oyentes.</div>'; return; }
     usersBox.innerHTML = users.map(u => {
       const ping = u.id === mySocketId ? (pingLabel?.textContent || "-- ms") : `${35 + Math.floor(Math.random()*28)} ms`;
       const battery = u.id === mySocketId && batteryPct ? `${batteryPct}%` : `${72 + Math.floor(Math.random()*24)}%`;
+      const hasLocation = !!(u.location && Number.isFinite(Number(u.location.lat)) && Number.isFinite(Number(u.location.lng)));
+      const locText = hasLocation ? "📍 Ubicación activa" : "📍 Esperando ubicación";
       return `<div class="user ${u.speaking ? "speaking" : ""}">
         <div class="avatar">${clean((u.name || "O")[0].toUpperCase())}</div>
-        <div><b>${clean(u.name)}${u.id === mySocketId ? " (tú)" : ""}</b><br><small>${u.speaking ? "🎤 Transmitiendo" : "Escuchando"}</small><div class="user-meta"><small>Ping ${ping}</small><small>Batería ${battery}</small></div></div>
+        <div><b>${clean(u.name)}${u.id === mySocketId ? " (tú)" : ""}</b><br><small>${u.speaking ? "🎤 Transmitiendo" : "Escuchando"} · ${locText}</small><div class="user-meta"><small>Ping ${ping}</small><small>Batería ${battery}</small></div></div>
         <div class="signal-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></div><i class="pulse"></i></div>`;
     }).join("");
   }
 
+  function emitMyLocation(coords){
+    if(!coords || !socket?.connected) return;
+    myLastLocation = { lat:coords.latitude, lng:coords.longitude };
+    socket.emit("location-update", {
+      lat:coords.latitude,
+      lng:coords.longitude,
+      accuracy:coords.accuracy,
+      speed:coords.speed,
+      heading:coords.heading
+    });
+  }
+
   function startLocationWatch(){
-    if(!navigator.geolocation || geoWatchId) return;
+    if(!navigator.geolocation){
+      addMessage("Sistema", "Este celular no soporta ubicación GPS.");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(pos => emitMyLocation(pos.coords), err => {
+      console.warn("Ubicación inicial no disponible", err.message);
+      addMessage("Sistema", "Activa el permiso de ubicación para que los demás vean tu punto en el mapa.");
+    }, { enableHighAccuracy:true, maximumAge:0, timeout:15000 });
+    if(geoWatchId) return;
     geoWatchId = navigator.geolocation.watchPosition(pos => {
-      const c = pos.coords;
-      myLastLocation = { lat:c.latitude, lng:c.longitude };
-      socket?.emit("location-update", { lat:c.latitude, lng:c.longitude, accuracy:c.accuracy, speed:c.speed, heading:c.heading });
-    }, err => { console.warn("Ubicación no disponible", err.message); }, { enableHighAccuracy:true, maximumAge:5000, timeout:12000 });
+      emitMyLocation(pos.coords);
+    }, err => {
+      console.warn("Ubicación no disponible", err.message);
+      addMessage("Sistema", "Ubicación pausada o bloqueada. Activa GPS/permisos para aparecer en el mapa.");
+    }, { enableHighAccuracy:true, maximumAge:3000, timeout:15000 });
   }
 
   async function renderMapPins(users){
     users = Array.isArray(users) ? users : [];
     const map = document.getElementById("liveMap");
     if(!map) return;
-    const oldLabel = map.querySelector(".me-pin");
-    if(oldLabel && oldLabel.textContent.includes("TU UBICACIÓN")){ oldLabel.innerHTML = "<span>⌁</span>"; oldLabel.classList.add("clean-pin"); }
 
     // Si Mapbox ya inició, usar mapa real. Si no, usar respaldo táctico.
     if(!mapboxReady){
@@ -550,18 +567,19 @@
         if(!marker){
           const el = document.createElement('div');
           el.className = 'mapbox-marker';
-          el.textContent = clean((u.name || 'R')[0].toUpperCase());
+          el.innerHTML = '<span class="pin-core">⌖</span>';
+          el.title = clean(u.name || 'Operador');
           marker = new mapboxgl.Marker(el)
             .setLngLat([lng, lat])
-            .setPopup(new mapboxgl.Popup({ offset: 18, className:'mapbox-popup' }).setHTML(`<b>${clean(u.name)}${u.id===mySocketId ? ' (tú)' : ''}</b><br>${u.speaking ? 'Transmitiendo' : 'En línea'}`))
             .addTo(mapboxMap);
           mapboxMarkers.set(u.id, marker);
         }else{
           marker.setLngLat([lng, lat]);
-          marker.getPopup().setHTML(`<b>${clean(u.name)}${u.id===mySocketId ? ' (tú)' : ''}</b><br>${u.speaking ? 'Transmitiendo' : 'En línea'}`);
         }
         const el = marker.getElement();
         el.classList.toggle('speaking', !!u.speaking);
+        el.classList.toggle('me', u.id === mySocketId);
+        el.title = clean(u.name || 'Operador');
       }
 
       if(located.length === 1){
@@ -587,11 +605,11 @@
       const x = 10 + ((lng - minLng) / lngSpan) * 80;
       const y = 86 - ((lat - minLat) / latSpan) * 72;
       const pin = document.createElement("div");
-      pin.className = "map-pin" + (u.speaking ? " speaking" : "");
+      pin.className = "map-pin" + (u.speaking ? " speaking" : "") + (u.id===mySocketId ? " me" : "");
       pin.style.left = Math.max(8, Math.min(88, x)) + "%";
       pin.style.top = Math.max(14, Math.min(84, y)) + "%";
-      const sp = u.location.speed && u.location.speed > 0 ? ` · ${Math.round(u.location.speed*3.6)} km/h` : "";
-      pin.innerHTML = `${clean(u.name)}${u.id===mySocketId ? " (tú)" : ""}<br><small>${u.speaking ? "Transmitiendo" : "En línea"}${sp}</small>`;
+      pin.title = clean(u.name || "Operador");
+      pin.innerHTML = '<span class="pin-core">⌖</span>';
       map.appendChild(pin);
     }
   }
@@ -715,11 +733,12 @@
     } else {
       socket?.emit("client-visible", true);
       requestWakeLock();
+      startLocationWatch();
       setTimeout(() => hardResync("visible"), 250);
       setTimeout(() => hardResync("visible-2"), 2200);
     }
   });
-  window.addEventListener("focus", () => { if(joined) setTimeout(() => hardResync("focus"), 250); });
+  window.addEventListener("focus", () => { if(joined){ startLocationWatch(); setTimeout(() => hardResync("focus"), 250); } });
   window.addEventListener("pageshow", () => { if(joined) setTimeout(() => hardResync("pageshow"), 250); });
   window.addEventListener("online", () => { if(joined) setTimeout(() => hardResync("online"), 250); });
   window.addEventListener("pagehide", () => { if(joined){ socket?.emit("client-visible", false); socket?.emit("release-talk"); } });

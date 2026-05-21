@@ -2,19 +2,19 @@
 
 .map-token-btn{position:absolute;right:12px;top:12px;z-index:5;border:1px solid #9fe64b;background:#14200c;color:#dfffaf;border-radius:10px;padding:10px 12px;font-weight:900;letter-spacing:.04em}.mapboxgl-map{position:absolute!important;inset:0;z-index:1}.mapboxgl-ctrl-bottom-left,.mapboxgl-ctrl-bottom-right{display:none}.map-pin{z-index:3}.me-pin{z-index:3}.mapbox-marker{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:#18230f;border:2px solid #9fe64b;color:#cffb8c;font-weight:900;box-shadow:0 0 0 12px #9fe64b1f,0 0 28px #9fe64b80}.mapbox-marker.speaking{border-color:#ff4938;color:#fff;background:#35140d;box-shadow:0 0 0 13px #ff493824,0 0 30px #ff4938}.mapbox-popup .mapboxgl-popup-content{background:#0a0d08;color:#eaf7ce;border:1px solid #536738;border-radius:12px;box-shadow:0 12px 35px #000}.mapbox-popup .mapboxgl-popup-tip{border-top-color:#536738!important}
 
-/* KANDU FIX: mapa limpio y operadores visibles */
-.operators-inline{margin:12px 0 10px;border:1px solid #354326;background:linear-gradient(180deg,#0b1109,#070907);border-radius:14px;padding:12px}
-.operators-inline h3{margin:0 0 10px;color:#dff9bd;font-size:13px;letter-spacing:.08em;display:flex;justify-content:space-between;align-items:center}
-.operators-inline h3 b{color:#9fe64b;background:#1a260f;border:1px solid #3e5a22;border-radius:999px;padding:2px 9px}
-.users-compact{display:grid;gap:7px;max-height:155px;overflow:auto;padding-right:2px}
-.user-compact{display:grid;grid-template-columns:12px 1fr auto;gap:10px;align-items:center;padding:9px 10px;border:1px solid #26351d;background:#080c07;border-radius:10px;color:#f4ffe6}
-.user-compact .dot{width:9px;height:9px;border-radius:50%;background:#9fe64b;box-shadow:0 0 12px #9fe64b}
-.user-compact b{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.user-compact small{color:#9fe64b;font-weight:900}
-.user-compact.speaking{border-color:#ff4938;background:#1a0d08}
-.user-compact.speaking .dot{background:#ff4938;box-shadow:0 0 14px #ff4938}
-.clean-pin{width:58px!important;height:58px!important;padding:0!important;display:grid!important;place-items:center!important;font-size:0!important;background:#10190b!important;border:2px solid #9fe64b!important}
-.clean-pin span{font-size:30px;color:#bfff75;text-shadow:0 0 18px #9fe64b}
-.clean-pin small,.clean-pin br{display:none!important}
-.mapboxgl-marker{z-index:4}
-@media(max-width:520px){.users-compact{max-height:130px}.operators-inline{padding:10px}.user-compact{grid-template-columns:10px 1fr auto;padding:8px}.user-compact b{font-size:14px}}
+
+
+/* GPS EN VIVO: puntos visibles sin texto encima del mapa */
+.mapbox-marker,.map-pin{
+  width:42px!important;height:42px!important;padding:0!important;border-radius:50%!important;
+  display:grid!important;place-items:center!important;background:#13210b!important;
+  border:2px solid #9fe64b!important;color:#cfff8b!important;font-size:20px!important;font-weight:900!important;
+  box-shadow:0 0 0 14px #9fe64b20,0 0 34px #9fe64b85!important;
+  visibility:visible!important;opacity:1!important;pointer-events:auto!important;
+  white-space:normal!important;line-height:1!important;text-indent:0!important;
+}
+.map-pin:before,.map-pin:after,.mapbox-marker:before,.mapbox-marker:after{content:none!important;display:none!important}
+.mapbox-marker.me,.map-pin.me{background:#1f310d!important;box-shadow:0 0 0 18px #9fe64b25,0 0 45px #9fe64baa!important}
+.mapbox-marker.speaking,.map-pin.speaking{background:#35140d!important;border-color:#ff4938!important;color:#fff!important;box-shadow:0 0 0 16px #ff493828,0 0 35px #ff4938!important}
+.pin-core{display:block!important;width:100%;height:100%;display:grid!important;place-items:center!important}
+.mapboxgl-popup,.mapbox-popup{display:none!important}

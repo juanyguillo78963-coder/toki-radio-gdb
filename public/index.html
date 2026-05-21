@@ -7,7 +7,7 @@
   <title>Radio Telefónico Militar | Gases de Belén</title>
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.css" />
-  <link rel="stylesheet" href="/style.css?v=ui-operadores-20260521" />
+  <link rel="stylesheet" href="/style.css" />
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.js"></script>
   <script src="/socket.io/socket.io.js"></script>
 </head>
@@ -36,10 +36,6 @@
           <div class="bars"><i></i><i></i><i></i><i></i></div>
         </div>
         <div class="online-row"><b id="countLabel">0</b> USUARIOS CONECTADOS <span id="connStatus">Conectando...</span></div>
-        <section class="operators-inline">
-          <h3>OPERADORES CONECTADOS <b id="inlineCount">0</b></h3>
-          <div id="usersCompact" class="users-compact"><div class="empty">Esperando operadores...</div></div>
-        </section>
         <div class="wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
         <div class="status-strip"><span id="radioFxStatus">SONIDO RADIO REAL</span><strong id="speakerTag">CANAL LIBRE</strong></div>
         <div class="radar-mini"><span></span><em></em></div>
@@ -68,7 +64,6 @@
       <header class="subbar"><button>‹</button><h2>MAPA EN VIVO</h2><button>⌖</button></header>
       <div id="liveMap" class="map-live">
         <div class="gridmap"></div>
-        <div class="me-pin clean-pin" aria-label="Central Gases de Belén"><span>⌁</span></div>
         <button id="mapTokenBtn" class="map-token-btn" type="button">ACTIVAR MAPBOX</button>
       </div>
       <section class="operators panel">
@@ -88,6 +83,6 @@
     <article><b>PTT</b><span>Presiona para hablar.</span></article>
     <article><b>RECONEXIÓN</b><span>Se recupera sola.</span></article>
   </footer>
-  <script src="/app.js?v=ui-operadores-20260521"></script>
+  <script src="/app.js"></script>
 </body>
 </html>
