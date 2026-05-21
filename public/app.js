@@ -737,3 +737,13 @@
   });
   if("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(()=>{}));
 })();
+
+// Reloj visual inferior
+(() => {
+  const el = document.getElementById('clockLabel');
+  if(!el) return;
+  const tick = () => {
+    try { el.textContent = new Date().toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit' }); } catch { el.textContent = '--:--'; }
+  };
+  tick(); setInterval(tick, 30000);
+})();
